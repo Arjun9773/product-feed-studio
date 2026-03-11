@@ -15,13 +15,13 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { title: "Output Feed", icon: RssIcon, path: "/output-feed" },
-  { title: "Feed Product List", icon: Package, path: "/feed-products" },
+  { title: "Manage Feed Setup", icon: Settings, path: "/manage-feed-setup" },
+  { title: "Feed Audit", icon: ClipboardCheck, path: "/feed-audit" },
+  { title: "Field Optimization", icon: Sliders, path: "/field-optimization" },
   { title: "Title Optimization", icon: Type, path: "/title-optimization" },
   { title: "Google Category", icon: FolderTree, path: "/google-category" },
-  { title: "Field Optimization", icon: Sliders, path: "/field-optimization" },
-  { title: "Feed Audit", icon: ClipboardCheck, path: "/feed-audit" },
-  { title: "Manage Feed Setup", icon: Settings, path: "/manage-feed-setup" },
+  { title: "Output Feed", icon: RssIcon, path: "/output-feed" },
+  { title: "Feed Product List", icon: Package, path: "/feed-products" },
 ];
 
 interface AppSidebarProps {

@@ -13,7 +13,7 @@ export default function ManageFeedSetup() {
   const [scheduleTime, setScheduleTime] = useState("06:00");
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-3xl">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-7xl">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Manage Feed Setup</h1>
         <p className="text-muted-foreground text-sm mt-1">Please set the format, text encoding and upload product feed file for us to process.</p>
