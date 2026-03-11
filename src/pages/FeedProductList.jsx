@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, ChevronLeft, ChevronRight, ImageOff } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ImageOff, Package, ShieldCheck, LayoutGrid, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { mockProducts } from "@/data/mockData";
@@ -20,6 +20,29 @@ export default function FeedProductList() {
         <h1 className="text-2xl font-bold text-foreground">Feed Product List</h1>
         <p className="text-muted-foreground text-sm mt-1">Showing {filtered.length} of {mockProducts.length} items</p>
       </div>
+
+      {(() => {
+        const uniqueCategories = [...new Set(mockProducts.map((p) => p.category).filter(Boolean))].length;
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Total Products", value: mockProducts.length, sub: "In current feed", icon: Package, color: "text-primary", bg: "bg-primary/10" },
+              { label: "Feed Completeness", value: "18%", sub: "Overall data quality score", icon: ShieldCheck, color: "text-info", bg: "bg-info/10" },
+              { label: "Categories", value: uniqueCategories, sub: "Product categories", icon: LayoutGrid, color: "text-success", bg: "bg-success/10" },
+              { label: "Missing Attributes", value: 67, sub: "Fields needing data", icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
+            ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+              <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
+                <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                  <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+                  {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="bg-card rounded-xl p-4 card-shadow border border-border">
         <div className="relative max-w-md">

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Save } from "lucide-react";
+import { Save, FileText, Calendar, Link2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -17,6 +17,24 @@ export default function ManageFeedSetup() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Manage Feed Setup</h1>
         <p className="text-muted-foreground text-sm mt-1">Please set the format, text encoding and upload product feed file for us to process.</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Feed Name", value: feedName, sub: "Active feed identifier", icon: Settings, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Feed Format", value: feedFormat, sub: "Data format for import", icon: FileText, color: "text-info", bg: "bg-info/10" },
+          { label: "Schedule", value: schedule, sub: `At ${scheduleTime} daily`, icon: Calendar, color: "text-warning", bg: "bg-warning/10" },
+          { label: "Import Source", value: "HTTP URL", sub: "External feed URL", icon: Link2, color: "text-success", bg: "bg-success/10" },
+        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+          <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
+            <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-lg font-bold mt-0.5 ${color} truncate max-w-[120px]`}>{value}</p>
+              {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="bg-card rounded-xl p-6 card-shadow border border-border space-y-6">

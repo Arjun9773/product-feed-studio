@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Play, Edit, Trash2 } from "lucide-react";
+import { Plus, Play, Edit, Trash2, ListOrdered, Package, CheckCircle2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,24 @@ export default function TitleOptimization() {
           <Plus className="h-4 w-4" />
           Add New Rule
         </Button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Total Rules", value: rules.length, sub: "Optimization rules defined", icon: ListOrdered, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Products Covered", value: rules.reduce((s, r) => s + r.productsCount, 0), sub: "Products with active rules", icon: Package, color: "text-info", bg: "bg-info/10" },
+          { label: "Not Started", value: rules.filter((r) => r.status === "not started").length, sub: "Rules pending execution", icon: Clock, color: "text-warning", bg: "bg-warning/10" },
+          { label: "Completed", value: rules.filter((r) => r.status === "completed").length, sub: "Successfully optimized", icon: CheckCircle2, color: "text-success", bg: "bg-success/10" },
+        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+          <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
+            <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+              {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            </div>
+          </div>
+        ))}
       </div>
 
       {showForm && (

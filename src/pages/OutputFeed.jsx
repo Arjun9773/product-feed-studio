@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, RefreshCw, Edit, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Edit, Trash2, FileOutput, Package, Globe, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { outputFeeds } from "@/data/mockData";
@@ -10,7 +10,7 @@ export default function OutputFeed() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Output Feed</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -27,6 +27,24 @@ export default function OutputFeed() {
             Add New Feed
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Total Feeds", value: feeds.length, sub: "Generated output feeds", icon: FileOutput, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Total Products", value: feeds.reduce((s, f) => s + f.products, 0), sub: "Products across all feeds", icon: Package, color: "text-info", bg: "bg-info/10" },
+          { label: "Delivery Methods", value: [...new Set(feeds.map((f) => f.deliveryMethod))].join(", ") || "—", sub: "Feed delivery type", icon: Globe, color: "text-success", bg: "bg-success/10" },
+          { label: "Pending Builds", value: feeds.filter((f) => f.status === "Not yet built").length, sub: "Feeds not yet generated", icon: AlertCircle, color: "text-warning", bg: "bg-warning/10" },
+        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+          <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
+            <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+              {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="bg-card rounded-xl card-shadow border border-border overflow-hidden">
