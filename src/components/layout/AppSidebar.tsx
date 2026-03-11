@@ -1,13 +1,12 @@
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
+  Rss as RssIcon,
   Package,
-  Sparkles,
+  Type,
   FolderTree,
-  Workflow,
+  Sliders,
   ClipboardCheck,
-  Download,
-  Plug,
   Settings,
   ChevronLeft,
   Rss,
@@ -16,14 +15,13 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { title: "Products", icon: Package, path: "/products" },
-  { title: "Feed Optimization", icon: Sparkles, path: "/feed-optimization" },
-  { title: "Category Mapping", icon: FolderTree, path: "/category-mapping" },
-  { title: "Feed Rules", icon: Workflow, path: "/feed-rules" },
+  { title: "Output Feed", icon: RssIcon, path: "/output-feed" },
+  { title: "Feed Product List", icon: Package, path: "/feed-products" },
+  { title: "Title Optimization", icon: Type, path: "/title-optimization" },
+  { title: "Google Category", icon: FolderTree, path: "/google-category" },
+  { title: "Field Optimization", icon: Sliders, path: "/field-optimization" },
   { title: "Feed Audit", icon: ClipboardCheck, path: "/feed-audit" },
-  { title: "Exports", icon: Download, path: "/exports" },
-  { title: "Integrations", icon: Plug, path: "/integrations" },
-  { title: "Settings", icon: Settings, path: "/settings" },
+  { title: "Manage Feed Setup", icon: Settings, path: "/manage-feed-setup" },
 ];
 
 interface AppSidebarProps {
@@ -49,7 +47,7 @@ export function AppSidebar({ open, onToggle }: AppSidebarProps) {
           </div>
           {open && (
             <span className="text-lg font-bold text-foreground truncate">
-              FeedFlow
+              DigitalDataFeed
             </span>
           )}
         </div>
