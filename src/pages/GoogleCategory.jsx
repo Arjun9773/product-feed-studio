@@ -319,26 +319,64 @@ export default function GoogleCategory() {
 
       {/* ── toolbar ── */}
       <div className="bg-card rounded-xl p-4 card-shadow border border-border">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-            onClick={handleAiFill}
-            disabled={aiLoading}
-          >
-            {aiLoading
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling…</>
-              : <><Sparkles className="h-4 w-4" /> AI Auto-Fill All</>
-            }
-          </Button>
-          {mappedCount > 0 && (
-            <Button variant="outline" className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleClearAll}>
-              <XCircle className="h-4 w-4" /> Clear All
+
+        <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
+
+          {/* Left Side */}
+          <div className="flex items-start gap-3">
+            
+            {/* Icon */}
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-purple-100">
+              <Sparkles className="h-4 w-4 text-purple-600" />
+            </div>
+
+            {/* Text */}
+            <div>
+              <p className="text-sm font-semibold text-purple-700">
+                AI Auto-Fill — Google Category
+              </p>
+              <p className="text-xs text-purple-600">
+                Use AI to automatically assign Google Product Categories for all products instantly.
+                Unmapped values will be suggested based on product title and description.
+              </p>
+            </div>
+
+          </div>
+
+          {/* Right Side Buttons */}
+          <div className="flex items-center gap-2">
+
+            <Button
+              className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={handleAiFill}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Filling…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  AI Fill All
+                </>
+              )}
             </Button>
-          )}
-          <p className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
-            <MousePointerClick className="h-3.5 w-3.5" />
-            Click the Google Category cell to assign inline.
-          </p>
+
+            {mappedCount > 0 && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={handleClearAll}
+              >
+                <XCircle className="h-4 w-4" />
+                Clear
+              </Button>
+            )}
+
+          </div>
+
         </div>
 
         {aiLoading && (

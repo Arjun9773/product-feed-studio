@@ -10,7 +10,7 @@ export default function OutputFeed() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Output Feed</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -29,73 +29,73 @@ export default function OutputFeed() {
         </div>
       </div>
 
-    {/* Table Container */}
-    <div className="bg-card rounded-xl card-shadow border border-border overflow-hidden">
-      <div className="p-4 border-b border-border bg-muted/10 flex justify-between items-center">
-        <p className="text-xs sm:text-sm text-muted-foreground font-medium">
-          Showing {feeds.length} of {feeds.length} items
-        </p>
-        <span className="text-[10px] text-muted-foreground sm:hidden animate-pulse">
-          Swipe left to view more →
-        </span>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Total Feeds", value: feeds.length, sub: "Generated output feeds", icon: FileOutput, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Total Products", value: feeds.reduce((s, f) => s + f.products, 0), sub: "Products across all feeds", icon: Package, color: "text-info", bg: "bg-info/10" },
+          { label: "Delivery Methods", value: [...new Set(feeds.map((f) => f.deliveryMethod))].join(", ") || "—", sub: "Feed delivery type", icon: Globe, color: "text-success", bg: "bg-success/10" },
+          { label: "Pending Builds", value: feeds.filter((f) => f.status === "Not yet built").length, sub: "Feeds not yet generated", icon: AlertCircle, color: "text-warning", bg: "bg-warning/10" },
+        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+          <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
+            <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+              {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Responsive Horizontal Scroll Wrapper */}
-      <div className="overflow-x-auto w-full">
-        {/* min-w-[900px] ensures the table columns don't collapse on mobile */}
-        <table className="w-full text-sm min-w-[900px] border-collapse">
-          <thead>
-            <tr className="border-b border-border bg-secondary/30">
-              <th className="p-4 text-left text-muted-foreground font-semibold">Feed Name</th>
-              <th className="p-4 text-left text-muted-foreground font-semibold">Products</th>
-              <th className="p-4 text-left text-muted-foreground font-semibold">Delivery Method</th>
-              <th className="p-4 text-left text-muted-foreground font-semibold">Status</th>
-              <th className="p-4 text-left text-muted-foreground font-semibold">Options</th>
-              <th className="p-4 text-left text-muted-foreground font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {feeds.map((feed) => (
-              <tr key={feed.id} className="hover:bg-secondary/20 transition-colors">
-                <td className="p-4 font-medium text-foreground">{feed.feedName}</td>
-                <td className="p-4 text-foreground">{feed.products}</td>
-                <td className="p-4 text-foreground">{feed.deliveryMethod}</td>
-                <td className="p-4">
-                  <Badge className="bg-warning/10 text-warning border-0 font-medium px-2 py-0.5">
-                    {feed.status}
-                  </Badge>
-                </td>
-                <td className="p-4">
-                  <Button size="sm" variant="outline" className="gap-1.5 text-primary border-primary/30 hover:bg-primary/5 h-8">
-                    <RefreshCw className="h-3 w-3" />
-                    Refresh now
-                  </Button>
-                </td>
-                <td className="p-4">
-                  <div className="flex gap-2">
-                    <Button size="sm" className="bg-primary text-primary-foreground gap-1.5 h-8">
-                      <Edit className="h-3 w-3" />
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="destructive" className="gap-1.5 h-8">
-                      <Trash2 className="h-3 w-3" />
-                      Delete
-                    </Button>
-                  </div>
-                </td>
+      <div className="bg-card rounded-xl card-shadow border border-border overflow-hidden">
+        <div className="p-4 border-b border-border">
+          <p className="text-sm text-muted-foreground">Showing {feeds.length} of {feeds.length} items</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-secondary/50">
+                <th className="p-4 text-left text-muted-foreground font-medium">Feed Name</th>
+                <th className="p-4 text-left text-muted-foreground font-medium">Products</th>
+                <th className="p-4 text-left text-muted-foreground font-medium">Delivery Method</th>
+                <th className="p-4 text-left text-muted-foreground font-medium">Status</th>
+                <th className="p-4 text-left text-muted-foreground font-medium">Options</th>
+                <th className="p-4 text-left text-muted-foreground font-medium">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {feeds.map((feed) => (
+                <tr key={feed.id} className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors">
+                  <td className="p-4 font-medium text-foreground">{feed.feedName}</td>
+                  <td className="p-4 text-foreground">{feed.products}</td>
+                  <td className="p-4 text-foreground">{feed.deliveryMethod}</td>
+                  <td className="p-4">
+                    <Badge className="bg-warning/10 text-warning border-0 font-medium">{feed.status}</Badge>
+                  </td>
+                  <td className="p-4">
+                    <Button size="sm" variant="outline" className="gap-1 text-primary border-primary/30 hover:bg-primary/5">
+                      <RefreshCw className="h-3 w-3" />
+                      Refresh now
+                    </Button>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex gap-2">
+                      <Button size="sm" className="bg-primary text-primary-foreground gap-1 h-8">
+                        <Edit className="h-3 w-3" />
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="destructive" className="gap-1 h-8">
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      
-      {/* Mobile Footer Hint */}
-      <div className="sm:hidden p-3 bg-muted/5 border-t border-border text-center">
-        <p className="text-[10px] text-muted-foreground italic">
-          Tip: Scroll the table sideways to manage feeds.
-        </p>
-      </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
 }
