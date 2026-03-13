@@ -254,8 +254,8 @@ export default function FieldOptimization() {
 
       {/* ── filters bar ── */}
       <div className="bg-card rounded-xl p-4 card-shadow border border-border">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1 min-w-[160px]">
+        <div className="flex flex-wrap items-end gap-5">
+          <div className="flex flex-col gap-1 max-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Data Field</label>
             <select
               className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
@@ -266,14 +266,14 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 min-w-[130px]">
+          <div className="flex flex-col gap-1 max-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Status</label>
             <select className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground" value={selectedTagging} onChange={(e) => setSelectedTagging(e.target.value)}>
               {taggingOptions.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 min-w-[150px]">
+          <div className="flex flex-col gap-1 max-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Category</label>
             <select className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
               <option value="">All Categories</option>
@@ -281,7 +281,7 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 min-w-[130px]">
+          <div className="flex flex-col gap-1 max-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Brand</label>
             <select className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground" value={selectedBrand} onChange={(e) => setSelectedBrand(e.target.value)}>
               <option value="">All Brands</option>
@@ -289,7 +289,7 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+          <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Search</label>
             <div className="relative">
               <MousePointerClick className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -297,30 +297,51 @@ export default function FieldOptimization() {
             </div>
           </div>
 
-          <div className="flex items-end gap-2 self-end">
-            <Button
-              className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-              onClick={handleAiFill}
-              disabled={aiLoading}
-            >
-              {aiLoading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling…</>
-                : <><Sparkles className="h-4 w-4" /> AI Fill</>
-              }
-            </Button>
-            {filledCount > 0 && (
-              <Button variant="outline" className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleClearAll}>
-                <XCircle className="h-4 w-4" /> Clear All
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={() => { setSearch(""); setSelectedCategory(""); setSelectedBrand(""); setSelectedTagging("All"); }}>
-              Reset
-            </Button>
-          </div>
+          <Button size="sm" variant="outline" className="self-end" onClick={() => { setSearch(""); setSelectedCategory(""); setSelectedBrand(""); setSelectedTagging("All"); }}>
+            Reset
+          </Button>
         </div>
 
+        {!aiLoading && (
+          <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
+            <MousePointerClick className="h-3.5 w-3.5" />
+            Click a product row to enter the <strong>{selectedField}</strong> value inline. Press Enter or ✓ to save.
+          </p>
+        )}
+      </div>
+
+      {/* ── AI action card ── */}
+      <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 card-shadow flex items-center justify-between gap-6 flex-wrap">
+        <div className="flex items-start gap-3">
+          <div className="h-9 w-9 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
+            <Sparkles className="h-4.5 w-4.5 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-purple-900">AI Auto-Fill — {selectedField}</p>
+            <p className="text-xs text-purple-600 mt-0.5">
+              Use AI to automatically fill <strong>{selectedField}</strong> for all {mockProducts.length} products instantly. Unfilled values will be suggested based on product data.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {filledCount > 0 && (
+            <Button variant="outline" className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 text-sm" onClick={handleClearAll}>
+              <XCircle className="h-4 w-4" /> Clear All
+            </Button>
+          )}
+          <Button
+            className="gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm"
+            onClick={handleAiFill}
+            disabled={aiLoading}
+          >
+            {aiLoading
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling…</>
+              : <><Sparkles className="h-4 w-4" /> AI Fill All</>
+            }
+          </Button>
+        </div>
         {aiLoading && (
-          <div className="mt-3 h-1 w-full bg-secondary rounded-full overflow-hidden">
+          <div className="w-full h-1 bg-purple-100 rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-purple-500 rounded-full"
               initial={{ width: "0%" }}
@@ -328,12 +349,6 @@ export default function FieldOptimization() {
               transition={{ duration: 1.3, ease: "easeInOut" }}
             />
           </div>
-        )}
-        {!aiLoading && (
-          <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
-            <MousePointerClick className="h-3.5 w-3.5" />
-            Click a product row to enter the <strong>{selectedField}</strong> value inline. Press Enter or ✓ to save.
-          </p>
         )}
       </div>
 

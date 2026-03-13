@@ -10,6 +10,7 @@ import {
   Settings,
   ChevronLeft,
   Rss,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ const navItems = [
   { title: "Feed Audit",        icon: ClipboardCheck,  path: "/feed-audit" },
   { title: "Field Optimization",icon: Sliders,         path: "/field-optimization" },
   { title: "Title Optimization",icon: Type,            path: "/title-optimization" },
+  { title: "Custom Labels",     icon: Tag,             path: "/custom-labels" },
   { title: "Google Category",   icon: FolderTree,      path: "/google-category" },
   { title: "Feed Product List", icon: Package,         path: "/feed-products" },
   { title: "Output Feed",       icon: RssIcon,         path: "/output-feed" },
@@ -69,7 +71,7 @@ export function AppSidebar({ open, onToggle }) {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-150",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-accent hover:text-foreground"

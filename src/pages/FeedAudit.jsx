@@ -241,7 +241,7 @@ export default function FeedAudit() {
           bg={healthScore < 50 ? "bg-destructive/10" : healthScore < 75 ? "bg-warning/10" : "bg-success/10"}
         />
       </div>
-
+{/* 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1 bg-card border border-border rounded-xl p-5 flex flex-col gap-4 card-shadow">
           <div className="flex items-center gap-2">
@@ -301,7 +301,7 @@ export default function FeedAudit() {
             </PieChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </div> */}
 
       {quickWins.length > 0 && (
         <div className="bg-card border border-success/30 rounded-xl p-5 card-shadow">

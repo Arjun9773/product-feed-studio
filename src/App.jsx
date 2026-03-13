@@ -12,6 +12,7 @@ import GoogleCategory from "@/pages/GoogleCategory";
 import FieldOptimization from "@/pages/FieldOptimization";
 import FeedAudit from "@/pages/FeedAudit";
 import ManageFeedSetup from "@/pages/ManageFeedSetup";
+import CustomLabels from "@/pages/CustomLabels";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/field-optimization" element={<FieldOptimization />} />
             <Route path="/feed-audit" element={<FeedAudit />} />
             <Route path="/manage-feed-setup" element={<ManageFeedSetup />} />
+            <Route path="/custom-labels" element={<CustomLabels />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
