@@ -3,7 +3,11 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/context/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
 import OutputFeed from "@/pages/OutputFeed";
 import FeedProductList from "@/pages/FeedProductList";
@@ -23,20 +27,32 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route element={<DashboardLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/output-feed" element={<OutputFeed />} />
-            <Route path="/feed-products" element={<FeedProductList />} />
-            <Route path="/title-optimization" element={<TitleOptimization />} />
-            <Route path="/google-category" element={<GoogleCategory />} />
-            <Route path="/field-optimization" element={<FieldOptimization />} />
-            <Route path="/feed-audit" element={<FeedAudit />} />
-            <Route path="/manage-feed-setup" element={<ManageFeedSetup />} />
-            <Route path="/custom-labels" element={<CustomLabels />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            {/* Public */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+
+            {/* Protected — both roles use the same dashboard layout */}
+            <Route element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/output-feed" element={<OutputFeed />} />
+              <Route path="/feed-products" element={<FeedProductList />} />
+              <Route path="/title-optimization" element={<TitleOptimization />} />
+              <Route path="/google-category" element={<GoogleCategory />} />
+              <Route path="/field-optimization" element={<FieldOptimization />} />
+              <Route path="/feed-audit" element={<FeedAudit />} />
+              <Route path="/manage-feed-setup" element={<ManageFeedSetup />} />
+              <Route path="/custom-labels" element={<CustomLabels />} />
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
