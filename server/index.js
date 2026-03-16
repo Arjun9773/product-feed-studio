@@ -25,6 +25,10 @@ app.get('/', (req, res) => res.json({ message: 'Product Feed Studio API running'
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
+connectDB().then(async () => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  
+  // ✅ Cron jobs start 
+  const { initAllCrons } = require('./services/cronService');
+  await initAllCrons();
 });

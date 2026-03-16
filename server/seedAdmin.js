@@ -7,7 +7,8 @@ async function seedAdmin() {
   console.log('Connected to MongoDB');
 
   const db = mongoose.connection.db;
-  const collection = db.collection('gmc_admin_users');
+  // Updated collection name
+  const collection = db.collection('gmc_admin_companies');
 
   const exists = await collection.findOne({ role: 'super_admin' });
   if (exists) {

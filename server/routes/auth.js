@@ -82,7 +82,7 @@ router.post('/signup', async (req, res) => {
       store_id,
       shopName,
       id: user._id,
-    });
+    }); 
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -17,7 +17,19 @@ API.interceptors.request.use((config) => {
     config.headers['x-tenant-id'] = storeId;
   }
 
-  return config;
+  return config; 
 });
+
+// Auto logout when token is expired or invalid
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.clear();
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default API;
