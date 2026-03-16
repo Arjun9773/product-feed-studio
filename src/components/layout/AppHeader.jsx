@@ -58,14 +58,6 @@ export function AppHeader({ onMenuToggle }) {
         <Menu className="h-5 w-5" />
       </button>
 
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search products, feeds, rules..."
-          className="pl-10 bg-secondary border-0 h-10"
-        />
-      </div>
-
       <div className="ml-auto flex items-center gap-2">
        
 
