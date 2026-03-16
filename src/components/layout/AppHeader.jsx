@@ -67,53 +67,7 @@ export function AppHeader({ onMenuToggle }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        {/* Store Switcher — super_admin only */}
-        {isSuperAdmin && (
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm font-medium hover:bg-accent transition-colors"
-            >
-              <span className="max-w-[160px] truncate">{displayName}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            </button>
-
-            {dropdownOpen && (
-              <>
-                {/* Backdrop */}
-                <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border bg-card shadow-lg z-50 py-1">
-                  <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Super Admin
-                  </div>
-                  <div className="my-1 border-t" />
-                  {stores.length === 0 ? (
-                    <p className="px-3 py-2 text-sm text-muted-foreground">No stores yet</p>
-                  ) : (
-                    stores.map((store) => (
-                      <button
-                        key={store._id}
-                        onClick={() => handleStoreSelect(store)}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors ${
-                          activeShopName === store.shopName ? 'bg-accent font-medium' : ''
-                        }`}
-                      >
-                        {store.shopName}
-                      </button>
-                    ))
-                  )}
-                  <div className="my-1 border-t" />
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-accent transition-colors flex items-center gap-2"
-                  >
-                    <LogOut className="w-3.5 h-3.5" /> Logout
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+       
 
         <Button variant="ghost" size="icon" onClick={toggleDarkMode} className="text-muted-foreground hover:text-foreground">
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -125,20 +79,65 @@ export function AppHeader({ onMenuToggle }) {
         </Button>
 
         {/* Avatar + logout */}
-        <div className="ml-2 flex items-center gap-1">
-          <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold cursor-default">
-            {initials}
-          </div>
-          {!isSuperAdmin && (
-            <button
-              onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              title="Logout"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          )}
+        {/* Avatar + dropdown */}
+<div className="ml-2 relative">
+  <button
+    onClick={() => setDropdownOpen(!dropdownOpen)}
+    className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+  >
+    {initials}
+  </button>
+
+  {dropdownOpen && (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+      
+      <div className="absolute right-0 top-full mt-2 w-56 rounded-lg border bg-card shadow-lg z-50 py-1">
+        
+        {/* User info */}
+        <div className="px-3 py-2 border-b">
+          <p className="text-sm font-medium text-foreground">{displayName}</p>
+          <p className="text-xs text-muted-foreground">{isSuperAdmin ? 'Super Admin' : 'Store Admin'}</p>
         </div>
+
+        {/* Store list — super_admin only */}
+        {isSuperAdmin && (
+          <>
+            <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-1">
+              Switch Store
+            </div>
+            {stores.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No stores yet</p>
+            ) : (
+              stores.map((store) => (
+                <button
+                  key={store._id}
+                  onClick={() => handleStoreSelect(store)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors ${
+                    activeShopName === store.shopName ? 'bg-accent font-medium' : ''
+                  }`}
+                >
+                  {store.shopName}
+                </button>
+              ))
+            )}
+            <div className="my-1 border-t" />
+          </>
+        )}
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-accent transition-colors flex items-center gap-2"
+        >
+          <LogOut className="w-3.5 h-3.5" /> Logout
+        </button>
+
+      </div>
+    </>
+  )}
+</div>
       </div>
     </header>
   );
