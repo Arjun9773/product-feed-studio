@@ -37,9 +37,10 @@ const Signup = () => {
         if (!value.trim()) return 'Your name is required';
         if (value.trim().length < 2) return 'Minimum 2 characters';
         return '';
-      case 'phone':
-        if (value && !/^\+?[\d\s\-()]{7,15}$/.test(value)) return 'Enter a valid phone number';
-        return '';
+     case 'phone':
+      if (!value.trim()) return 'Phone number is required';  // ← ADD THIS
+      if (!/^\+?[\d\s\-()]{7,15}$/.test(value)) return 'Enter a valid phone number';
+      return '';
       case 'email':
         if (!value.trim()) return 'Email is required';
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email address';
@@ -61,6 +62,7 @@ const Signup = () => {
 
   const handleChange = (e) => {
     const { id, value } = e.target;
+    if (id === 'phone' && value && !/^[\d\s\-()+]*$/.test(value)) return;
     const updated = { ...form, [id]: value };
     setForm(updated);
     if (touched[id]) setErrors(prev => ({ ...prev, [id]: validate(id, value, updated) }));
@@ -84,6 +86,19 @@ const Signup = () => {
         setEmailStatus(null);
       }
     }
+
+    if (id === 'shopName' && !error && value.trim().length >= 2) {
+      try {
+        const { data } = await API.get(
+          `/auth/check-shopname?shopName=${encodeURIComponent(value.trim())}`
+        );
+        if (data.exists) {
+          setErrors(prev => ({ ...prev, shopName: 'This shop name is already taken' }));
+        }
+      } catch {
+        // silently ignore
+      }
+    }
   }, [form]);
 
   const handleSubmit = async (e) => {
@@ -101,9 +116,16 @@ const Signup = () => {
       await API.post('/auth/signup', { shopName: form.shopName, name: form.name, phone: form.phone, email: form.email, password: form.password });
       navigate('/login?registered=1');
     } catch (err) {
-      setServerError(err.response?.data?.message || 'Signup failed. Please try again.');
-    } finally {
-      setLoading(false);
+    const message = err.response?.data?.message || 'Signup failed. Please try again.';
+    const field   = err.response?.data?.field;
+
+      if (field === 'shopName') {
+        // show error directly under the shopName input
+        setErrors(prev => ({ ...prev, shopName: message }));
+        setTouched(prev => ({ ...prev, shopName: true }));
+      } else {
+        setServerError(message);
+      }
     }
   };
 
@@ -166,8 +188,10 @@ const Signup = () => {
                 </Field>
                 <Field label="Phone Number" error={touched.phone && errors.phone}>
                   <Input id="phone" type="tel" placeholder="+91 98765 43210"
-                    value={form.phone} onChange={handleChange} onBlur={handleBlur}
-                    className={inputClass('phone')} />
+                      value={form.phone} onChange={handleChange} onBlur={handleBlur}
+                      inputMode="numeric"   
+                      maxLength={15}        
+                      className={inputClass('phone')} />
                 </Field>
               </div>
 

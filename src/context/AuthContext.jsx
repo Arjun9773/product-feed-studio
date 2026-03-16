@@ -56,8 +56,24 @@ export function AuthProvider({ children }) {
 
   const currentStoreId = user?.role === 'super_admin' ? activeStoreId : user?.store_id;
 
+  // ✅ role helpers — single source of truth
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isStoreAdmin = user?.role === 'store_admin';
+  const canEdit      = isSuperAdmin;
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, switchStore, activeStoreId, activeShopName, currentStoreId }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      switchStore, 
+      activeStoreId, 
+      activeShopName, 
+      currentStoreId,
+      isSuperAdmin,   // ✅
+      isStoreAdmin,   // ✅
+      canEdit,        // ✅
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -52,6 +52,15 @@ router.get('/check-email', async (req, res) => {
   res.json({ exists: !!user });
 });
 
+router.get('/check-shopname', async (req, res) => {
+  const { shopName } = req.query;
+  if (!shopName) return res.json({ exists: false });
+  const user = await User.findOne({ 
+    shopName: { $regex: new RegExp(`^${shopName.trim()}$`, 'i') } 
+  });
+  res.json({ exists: !!user });
+});
+
 // POST /api/auth/signup  (public — anyone can register as store_admin)
 router.post('/signup', async (req, res) => {
   const { name, email, password, shopName, phone } = req.body;
@@ -62,12 +71,21 @@ router.post('/signup', async (req, res) => {
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ message: 'Email already registered' });
 
-    // Derive store_id from shopName: "Surya Electronics" → "surya_electronics"
-    const store_id = shopName.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    // Derive store_id from shopName
+    const baseStoreId = shopName.toLowerCase().trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+
+    // ✅ ADD THIS — make store_id unique by appending a number if already taken
+    let store_id = baseStoreId;
+    let counter = 1;
+    while (await User.findOne({ store_id })) {
+      store_id = `${baseStoreId}_${counter}`;
+      counter++;
+    }
 
     const user = await User.create({ name, email, password, shopName, phone: phone || '', store_id, role: 'store_admin' });
 
-    // Provision tenant DB with initial settings doc
     const tenantDb = getTenantDb(store_id);
     await tenantDb.collection('settings').insertOne({
       ownerId: user._id,
@@ -82,7 +100,7 @@ router.post('/signup', async (req, res) => {
       store_id,
       shopName,
       id: user._id,
-    }); 
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
