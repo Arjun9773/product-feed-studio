@@ -241,67 +241,6 @@ export default function FeedAudit() {
           bg={healthScore < 50 ? "bg-destructive/10" : healthScore < 75 ? "bg-warning/10" : "bg-success/10"}
         />
       </div>
-{/* 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1 bg-card border border-border rounded-xl p-5 flex flex-col gap-4 card-shadow">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-sm">Overall Feed Health</h2>
-          </div>
-          <div className="flex items-center justify-center">
-            <div className="relative flex items-center justify-center w-28 h-28">
-              <svg className="w-28 h-28 -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" strokeWidth="10" className="fill-none stroke-secondary" />
-                <circle
-                  cx="50" cy="50" r="40" strokeWidth="10"
-                  className="fill-none"
-                  stroke={healthScore < 50 ? "#ef4444" : healthScore < 75 ? "#f59e0b" : "#22c55e"}
-                  strokeDasharray={`${healthScore * 2.51} 251`}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute text-center">
-                <p className="text-2xl font-bold">{healthScore}</p>
-                <p className="text-xs text-muted-foreground">/ 100</p>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {Object.keys(feedAuditIssues).map((k) => (
-              <div key={k} className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${PRIORITY_CONFIG[k].dot}`} />
-                <span className="text-xs text-muted-foreground flex-1">{PRIORITY_CONFIG[k].label}</span>
-                <span className="text-xs font-medium">{feedAuditIssues[k].length} issues</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5 card-shadow">
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-sm">Issue Distribution by Priority</h2>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value">
-                {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(val, name) => [`${val} issues`, name]}
-                contentStyle={{ borderRadius: 8, fontSize: 12 }}
-              />
-              <Legend
-                iconType="circle"
-                iconSize={8}
-                formatter={(val) => <span className="text-xs text-muted-foreground">{val}</span>}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div> */}
 
       {quickWins.length > 0 && (
         <div className="bg-card border border-success/30 rounded-xl p-5 card-shadow">

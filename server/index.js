@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { connectDB } = require('./config/db');
+// const { initAllCrons } = require('./services/cronService');
+const cronRoutes       = require('./routes/cronRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 
 const app = express();
 
@@ -19,6 +22,8 @@ app.use('/api/audit', require('./routes/tenant/audit'));
 app.use('/api/title-rules', require('./routes/tenant/titleRules'));
 app.use('/api/custom-labels', require('./routes/tenant/customLabels'));
 app.use('/api/output-feeds', require('./routes/tenant/outputFeeds'));
+app.use('/api/cron', cronRoutes);
+app.use('/api/audit', auditRoutes);
 
 app.post('/api/test-signup', (req, res) => res.json({ ok: true, body: req.body }));
 app.get('/', (req, res) => res.json({ message: 'Product Feed Studio API running' }));

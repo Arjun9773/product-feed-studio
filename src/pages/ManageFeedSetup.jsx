@@ -241,7 +241,6 @@ export default function ManageFeedSetup() {
               className={`w-full sm:max-w-[200px] rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground ${!canEdit ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               <option>Json</option>
-              <option>Shopify</option>
             </select>
           </div>
         </div>
