@@ -60,7 +60,6 @@ export function AppHeader({ onMenuToggle }) {
 
       <div className="ml-auto flex items-center gap-2">
        
-
         <Button variant="ghost" size="icon" onClick={toggleDarkMode} className="text-muted-foreground hover:text-foreground">
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </Button>

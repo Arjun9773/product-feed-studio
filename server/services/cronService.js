@@ -426,6 +426,7 @@ async function initAllCrons() {
 
       registerFeedCron(tenantId, {
         _id:          company._id,
+        
         feedName:     company.shopName,
         importUrl:    feedInfo.feed_url,
         schedule:     feedInfo.schedule_info,
