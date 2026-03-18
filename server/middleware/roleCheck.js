@@ -1,5 +1,6 @@
 const roleCheck = (...allowedRoles) => (req, res, next) => {
-  if (!req.user || !allowedRoles.includes(req.user.role)) {
+  // Check userType instead of role
+  if (!req.user || !allowedRoles.includes(req.user.userType)) {
     return res.status(403).json({ message: 'Access denied' });
   }
   next();

@@ -408,26 +408,26 @@ async function initAllCrons() {
   try {
     console.log('[CRON] 🚀 Initializing all cron jobs...');
 
+    // Read from merchants collection in main DB
     const mainDb    = mongoose.connection.useDb('gmc_main_admin_db');
-    const companies = await mainDb.collection('gmc_admin_companies')
-      .find({ role: 'store_admin' })
+    const merchants = await mainDb.collection('merchants')
+      .find({ status: 'active' })
       .toArray();
 
-    console.log(`[CRON] Found ${companies.length} companies`);
+    console.log(`[CRON] Found ${merchants.length} merchants`);
 
-    for (const company of companies) {
-      const tenantId = company.store_id;
-      const feedInfo = company.feed_info;
+    for (const merchant of merchants) {
+      const tenantId = merchant.storeId;
+      const feedInfo = merchant.feed_info;
 
       if (!tenantId || !feedInfo?.feed_url || !feedInfo?.schedule_info) {
-        console.log(`[CRON] ⚠ Skipping: ${company.shopName} — missing feed config`);
+        console.log(`[CRON] ⚠ Skipping: ${tenantId} — missing feed config`);
         continue;
       }
 
       registerFeedCron(tenantId, {
-        _id:          company._id,
-        
-        feedName:     company.shopName,
+        _id:          merchant._id,
+        feedName:     feedInfo.feed_name || tenantId,
         importUrl:    feedInfo.feed_url,
         schedule:     feedInfo.schedule_info,
         scheduleTime: feedInfo.import_time,

@@ -1,47 +1,51 @@
 const express = require('express');
 const auth = require('../../middleware/auth');
 const { registerFeedCron } = require('../../services/cronService');
-const User = require('../../models/User');
+const Merchant = require('../../models/Merchant');
 
 const router = express.Router();
 
-// Helper — find correct company based on role
-async function getCompany(req) {
-  if (req.user.role === 'super_admin') {
-    // Super admin viewing a store — use x-tenant-id
-    const tenantId = req.headers['x-tenant-id'];
-    return await User.findOne({ store_id: tenantId });
+// Helper — find correct merchant based on role
+async function getMerchant(req) {
+  if (req.user.userType === 'super_admin') {
+    // Super admin viewing a store — use x-tenant-id header
+    const storeId = req.headers['x-tenant-id'];
+    return await Merchant.findOne({ storeId });
   }
-  // Normal store_admin — use their own _id
-  return await User.findById(req.user.id);
+  // Normal store_admin — use their own storeId from token
+  return await Merchant.findOne({ storeId: req.user.storeId });
 }
 
-// GET /api/feeds — Load feed config
+// GET /api/feeds — Load feed config from merchant document
 router.get('/', auth, async (req, res) => {
   try {
-    const company = await getCompany(req);
-    if (!company) return res.status(404).json({ message: 'Company not found' });
-    res.json(company.feed_info || {});
+    const merchant = await getMerchant(req);
+    if (!merchant) return res.status(404).json({ message: 'Merchant not found' });
+    res.json(merchant.feed_info || {});
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// PUT /api/feeds — Save feed config
+// PUT /api/feeds — Save feed config (super_admin only)
 router.put('/', auth, async (req, res) => {
-    
   try {
+    // Only super_admin can update feed config
+    if (req.user.userType !== 'super_admin') {
+      return res.status(403).json({ message: 'Only super admin can update feed configuration' });
+    }
+
     const { feedName, cmsUpload, feedFormat, importUrl, schedule, scheduleTime } = req.body;
 
-    const company = await getCompany(req);
-    if (!company) return res.status(404).json({ message: 'Company not found' });
+    const merchant = await getMerchant(req);
+    if (!merchant) return res.status(404).json({ message: 'Merchant not found' });
 
-    // Update feed_info nested fields
-    await User.findByIdAndUpdate(
-      company._id,
+    // Update feed_info nested fields inside merchant document
+    await Merchant.findByIdAndUpdate(
+      merchant._id,
       {
         $set: {
-          'feed_info.feed_name':      feedName,
+          'feed_info.feed_name':       feedName,
           'feed_info.cms_upload_type': cmsUpload,
           'feed_info.feed_type':       feedFormat,
           'feed_info.feed_url':        importUrl,
@@ -53,8 +57,8 @@ router.put('/', auth, async (req, res) => {
     );
 
     // Re-register cron with updated config
-    registerFeedCron(company.store_id, {
-      _id:          company._id,
+    registerFeedCron(merchant.storeId, {
+      _id:          merchant._id,
       feedName:     feedName,
       importUrl:    importUrl,
       schedule:     schedule,

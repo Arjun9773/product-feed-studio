@@ -8,11 +8,12 @@ export function AuthProvider({ children }) {
     if (!token) return null;
     return {
       token,
-      user_id:  localStorage.getItem('user_id'),
-      role:     localStorage.getItem('role'),
-      store_id: localStorage.getItem('store_id'),
-      shopName: localStorage.getItem('shopName'),
-      name:     localStorage.getItem('name'),
+      userId:    localStorage.getItem('userId'),
+      userType:  localStorage.getItem('userType'),
+      storeId:   localStorage.getItem('storeId'),
+      shopName:  localStorage.getItem('shopName'),
+      name:      localStorage.getItem('name'),
+      companyId: localStorage.getItem('companyId'),
     };
   });
 
@@ -24,19 +25,23 @@ export function AuthProvider({ children }) {
   );
 
   const login = (data) => {
-    localStorage.setItem('token',    data.token);
-    localStorage.setItem('user_id',  data.user_id || '');
-    localStorage.setItem('role',     data.role);
-    localStorage.setItem('store_id', data.store_id || '');
-    localStorage.setItem('shopName', data.shopName || '');
-    localStorage.setItem('name',     data.name || '');
+    // Save all user info to localStorage
+    localStorage.setItem('token',     data.token);
+    localStorage.setItem('userId',    data.userId    || '');
+    localStorage.setItem('userType',  data.userType  || '');
+    localStorage.setItem('storeId',   data.storeId   || '');
+    localStorage.setItem('shopName',  data.shopName  || '');
+    localStorage.setItem('name',      data.name      || '');
+    localStorage.setItem('companyId', data.companyId || '');
+
     setUser({
-      token:    data.token,
-      user_id:  data.user_id,
-      role:     data.role,
-      store_id: data.store_id,
-      shopName: data.shopName,
-      name:     data.name,
+      token:     data.token,
+      userId:    data.userId,
+      userType:  data.userType,
+      storeId:   data.storeId,
+      shopName:  data.shopName,
+      name:      data.name,
+      companyId: data.companyId,
     });
   };
 
@@ -54,25 +59,26 @@ export function AuthProvider({ children }) {
     localStorage.setItem('activeShopName', shopName);
   };
 
-  const currentStoreId = user?.role === 'super_admin' ? activeStoreId : user?.store_id;
+  // Super admin → switched store, Store admin → own store
+  const currentStoreId = user?.userType === 'super_admin' ? activeStoreId : user?.storeId;
 
-  // ✅ role helpers — single source of truth
-  const isSuperAdmin = user?.role === 'super_admin';
-  const isStoreAdmin = user?.role === 'store_admin';
+  // Role helpers — single source of truth
+  const isSuperAdmin = user?.userType === 'super_admin';
+  const isStoreAdmin = user?.userType === 'store_admin';
   const canEdit      = isSuperAdmin;
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      logout, 
-      switchStore, 
-      activeStoreId, 
-      activeShopName, 
+    <AuthContext.Provider value={{
+      user,
+      login,
+      logout,
+      switchStore,
+      activeStoreId,
+      activeShopName,
       currentStoreId,
-      isSuperAdmin,   // ✅
-      isStoreAdmin,   // ✅
-      canEdit,        // ✅
+      isSuperAdmin,
+      isStoreAdmin,
+      canEdit,
     }}>
       {children}
     </AuthContext.Provider>

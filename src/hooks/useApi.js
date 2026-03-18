@@ -11,13 +11,13 @@ API.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Use activeStoreId (super_admin viewing a store) or own store_id
-  const storeId = localStorage.getItem('activeStoreId') || localStorage.getItem('store_id');
+  // Use activeStoreId (super_admin viewing a store) or own storeId
+  const storeId = localStorage.getItem('activeStoreId') || localStorage.getItem('storeId');
   if (storeId) {
     config.headers['x-tenant-id'] = storeId;
   }
 
-  return config; 
+  return config;
 });
 
 // Auto logout when token is expired or invalid

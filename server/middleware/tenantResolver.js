@@ -1,16 +1,16 @@
 const { getTenantDb } = require('../config/db');
 
 const tenantResolver = (req, res, next) => {
-  // Super admin can pass x-tenant-id to view any store
-  // Store admin's store_id comes from their JWT
-  const storeId = req.headers['x-tenant-id'] || req.user?.store_id;
+  // Super admin passes x-tenant-id to view any store
+  // Store admin storeId comes from their JWT token
+  const storeId = req.headers['x-tenant-id'] || req.user?.storeId;
 
   if (!storeId) {
     return res.status(400).json({ message: 'Store ID is required' });
   }
 
   req.tenantDb = getTenantDb(storeId);
-  req.storeId = storeId;
+  req.tenantId = storeId;
   next();
 };
 
