@@ -34,15 +34,13 @@ router.post('/login', async (req, res) => {
       companyId: user.companyId,
       status:    'active',
     });
-
     if (!access) {
-      return res.status(401).json({
-        message: 'Access denied. Please contact admin.'
-      });
+      return res.status(401).json({ message: 'Access denied. Please contact admin.' });
     }
 
-    // Step 4: Get merchant info (store_admin only)
+    // Step 4: Get merchant + company info
     const merchant = await Merchant.findOne({ companyId: user.companyId });
+    const company  = await Company.findOne({ companyId: user.companyId });
 
     // Step 5: Create JWT token
     const token = generateToken({
@@ -54,11 +52,13 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      userId:    user.userId,
-      userType:  user.userType,
-      companyId: user.companyId,
-      shopName:  merchant?.feed_info?.feed_name || '',
-      name:      user.name,
+      userId:      user.userId,
+      userType:    user.userType,
+      companyId:   user.companyId,
+      companyName: company?.companyName  || '',
+      companyUrl:  user.companyUrl       || '',
+      email:       user.email,
+      shopName:    merchant?.feed_info?.feed_name || '',
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -73,12 +73,12 @@ router.get('/check-email', async (req, res) => {
   res.json({ exists: !!user });
 });
 
-// GET /api/auth/check-shopname
-router.get('/check-shopname', async (req, res) => {
-  const { shopName } = req.query;
-  if (!shopName) return res.json({ exists: false });
+// GET /api/auth/check-companyname
+router.get('/check-companyname', async (req, res) => {
+  const { companyName } = req.query;
+  if (!companyName) return res.json({ exists: false });
   const company = await Company.findOne({
-    companyId: shopName.toLowerCase().trim()
+    companyId: companyName.toLowerCase().trim()
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '')
   });
@@ -87,9 +87,9 @@ router.get('/check-shopname', async (req, res) => {
 
 // POST /api/auth/signup
 router.post('/signup', async (req, res) => {
-  const { name, email, password, shopName, phone } = req.body;
-  if (!name || !email || !password || !shopName)
-    return res.status(400).json({ message: 'name, email, password, and shopName are required' });
+  const { companyName, companyUrl, email, password, phone } = req.body;
+  if (!companyName || !companyUrl || !email || !password)
+    return res.status(400).json({ message: 'companyName, companyUrl, email and password are required' });
 
   try {
     // Step 1: Check email already exists
@@ -98,26 +98,27 @@ router.post('/signup', async (req, res) => {
 
     // Step 2: Create company — companyId auto slugified from companyName
     const company = await Company.create({
-      companyName: shopName,
-      status:      'active',
+      companyName,
+      companyUrl,
+      status: 'active',
     });
 
     // Step 3: Create user
     const user = await User.create({
-      companyId: company.companyId,
-      name,
+      companyId:  company.companyId,
+      companyName: companyName,
+      companyUrl,
       email,
       password,
       phone:    phone || '',
       userType: 'store_admin',
     });
 
-    // Step 4: Create merchant with empty feed_info
+    // Step 4: Create merchant
     const merchant = await Merchant.create({
       companyId: company.companyId,
       userId:    user.userId,
       status:    'active',
-      feed_info: {},
     });
 
     // Step 5: Create access record
@@ -125,26 +126,27 @@ router.post('/signup', async (req, res) => {
       companyId: company.companyId,
       userId:    user.userId,
       userType:  'store_admin',
-      userName:  name,
+      companyName: companyName,
       status:    'active',
     });
 
     // Step 6: Provision tenant DB
     const tenantDb = getTenantDb(company.companyId);
     await tenantDb.collection('settings').insertOne({
-      companyId:  company.companyId,
-      userId:     user.userId,
-      merchantId: merchant._id,
-      shopName,
-      status:    'active',
-      createdAt: new Date(),
+      companyId:   company.companyId,
+      companyName,
+      companyUrl,
+      userId:      user.userId,
+      merchantId:  merchant._id,
+      status:      'active',
+      createdAt:   new Date(),
     });
 
     res.status(201).json({
-      message:   'Store created successfully',
-      companyId: company.companyId,
-      shopName,
-      userId:    user.userId,
+      message:     'Store created successfully',
+      companyId:   company.companyId,
+      companyName,
+      userId:      user.userId,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -157,9 +159,9 @@ router.post('/seed-super-admin', async (req, res) => {
     const exists = await User.findOne({ userType: 'super_admin' });
     if (exists) return res.status(400).json({ message: 'Super admin already exists' });
 
-    const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ message: 'name, email and password are required' });
+    const { companyUrl, email, password } = req.body;
+    if (!companyUrl || !email || !password)
+      return res.status(400).json({ message: 'companyUrl, email and password are required' });
 
     // Create company for super admin
     const company = await Company.create({
@@ -169,8 +171,8 @@ router.post('/seed-super-admin', async (req, res) => {
 
     // Create super admin user
     const admin = await User.create({
-      companyId: company.companyId,
-      name,
+      companyId:  company.companyId,
+      companyUrl,
       email,
       password,
       userType: 'super_admin',
@@ -181,7 +183,7 @@ router.post('/seed-super-admin', async (req, res) => {
       companyId: company.companyId,
       userId:    admin.userId,
       userType:  'super_admin',
-      userName:  name,
+      userName:  companyUrl,
       status:    'active',
     });
 
@@ -198,18 +200,14 @@ router.get('/all-stores', auth, roleCheck('super_admin'), async (req, res) => {
 
     const stores = await Promise.all(
       merchants.map(async (merchant) => {
-        const user = await User.findOne({ 
-          userId: merchant.userId 
-        }).select('-password');
-        const company = await Company.findOne({ 
-          companyId: merchant.companyId 
-        });
+        const user    = await User.findOne({ userId: merchant.userId }).select('-password');
+        const company = await Company.findOne({ companyId: merchant.companyId });
         return {
           _id:         merchant._id,
           companyId:   merchant.companyId,
-          shopName:    company?.companyName || '',
+          companyName: company?.companyName || '',
+          companyUrl:  user?.companyUrl     || '',
           userId:      merchant.userId,
-          userName:    user?.name || '',
           status:      merchant.status,
         };
       })

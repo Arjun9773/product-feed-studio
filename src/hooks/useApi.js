@@ -1,5 +1,14 @@
 import axios from 'axios';
 
+// Decode JWT token to extract companyId without localStorage
+function decodeToken(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch {
+    return null;
+  }
+}
+
 const API = axios.create({
   baseURL: 'http://localhost:5000/api',
 });
@@ -11,8 +20,12 @@ API.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Use activeStoreId (super_admin viewing a store) or own storeId
-  const storeId = localStorage.getItem('activeStoreId') || localStorage.getItem('storeId');
+  // Super admin → activeStoreId from localStorage (switch பண்ணினது)
+  // Store admin / user → companyId from JWT token decode
+  const activeStoreId = localStorage.getItem('activeStoreId');
+  const decoded       = token ? decodeToken(token) : null;
+  const storeId       = activeStoreId || decoded?.companyId;
+
   if (storeId) {
     config.headers['x-tenant-id'] = storeId;
   }

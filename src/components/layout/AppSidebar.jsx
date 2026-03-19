@@ -15,15 +15,16 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { title: "Dashboard",         icon: LayoutDashboard, path: "/" },
-  { title: "Manage Feed Setup", icon: Settings,        path: "/manage-feed-setup" },
-  { title: "Feed Audit",        icon: ClipboardCheck,  path: "/feed-audit" },
-  { title: "Field Optimization",icon: Sliders,         path: "/field-optimization" },
-  { title: "Title Optimization",icon: Type,            path: "/title-optimization" },
-  { title: "Custom Labels",     icon: Tag,             path: "/custom-labels" },
-  { title: "Google Category",   icon: FolderTree,      path: "/google-category" },
-  { title: "Feed Product List", icon: Package,         path: "/feed-products" },
-  { title: "Output Feed",       icon: RssIcon,         path: "/output-feed" },
+  { title: "Dashboard",          icon: LayoutDashboard, path: "/" },
+  { title: "Manage Feed Setup",  icon: Settings,        path: "/manage-feed-setup" },
+  { title: "Feed Audit",         icon: ClipboardCheck,  path: "/feed-audit" },
+  { title: "Field Optimization", icon: Sliders,         path: "/field-optimization" },
+  { title: "Title Optimization", icon: Type,            path: "/title-optimization" },
+  { title: "Custom Labels",      icon: Tag,             path: "/custom-labels" },
+  { title: "Google Category",    icon: FolderTree,      path: "/google-category" },
+  { title: "Feed Product List",  icon: Package,         path: "/feed-products" },
+  { title: "Output Feed",        icon: RssIcon,         path: "/output-feed" },
+  { title: "Settings",           icon: Settings,        path: "/settings" },
 ];
 
 export function AppSidebar({ open, onToggle }) {
@@ -36,6 +37,7 @@ export function AppSidebar({ open, onToggle }) {
         open ? "w-64" : "w-[70px]"
       )}
     >
+      {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
@@ -63,6 +65,7 @@ export function AppSidebar({ open, onToggle }) {
         </button>
       </div>
 
+      {/* Main Nav */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -83,6 +86,22 @@ export function AppSidebar({ open, onToggle }) {
           );
         })}
       </nav>
+
+      {/* Settings — bottom-ல தனியா */}
+      <div className="px-3 pb-4 border-t border-sidebar-border pt-3">
+        <NavLink
+          to="/settings"
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-150",
+            location.pathname === "/settings"
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground hover:bg-accent hover:text-foreground"
+          )}
+        >
+          <Settings className="h-5 w-5 shrink-0" />
+          {open && <span className="truncate">Settings</span>}
+        </NavLink>
+      </div>
     </aside>
   );
 }

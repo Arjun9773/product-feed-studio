@@ -240,14 +240,15 @@ export default function FeedAudit() {
       setError(null);
 
       const res = await fetch(
-        `${API_BASE}/api/audit/feed-audit?store_id=${currentStoreId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type':  'application/json',
-          }
-        }
-      );
+  `${API_BASE}/api/audit/feed-audit?companyId=${currentStoreId}`,
+  {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'x-tenant-id':   currentStoreId, 
+      'Content-Type':  'application/json',
+    }
+  }
+);
 
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
@@ -270,16 +271,17 @@ export default function FeedAudit() {
     try {
       setRefreshing(true);
 
-      await fetch(
-        `${API_BASE}/api/audit/refresh?store_id=${currentStoreId}`,
-        {
-          method:  'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type':  'application/json',
-          }
-        }
-      );
+     await fetch(
+  `${API_BASE}/api/audit/refresh?companyId=${currentStoreId}`,
+  {
+    method:  'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'x-tenant-id':   currentStoreId, 
+      'Content-Type':  'application/json',
+    }
+  }
+);
 
       // Wait 3s for import + audit to complete
       await new Promise(r => setTimeout(r, 3000));

@@ -2,22 +2,34 @@ import { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext(null);
 
+// Decode JWT token to extract user info without extra API call
+function decodeToken(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const token = localStorage.getItem('token');
     if (!token) return null;
+
+    // Decode token to get userType + companyId — no localStorage needed
+    const decoded = decodeToken(token);
+    if (!decoded) return null;
+
     return {
       token,
-      userId:    localStorage.getItem('userId'),
-      userType:  localStorage.getItem('userType'),
-      storeId:   localStorage.getItem('storeId'),
-      shopName:  localStorage.getItem('shopName'),
-      name:      localStorage.getItem('name'),
-      companyId: localStorage.getItem('companyId'),
+      userId:    decoded.userId,
+      userType:  decoded.userType,
+      companyId: decoded.companyId,
     };
   });
 
-  const [activeStoreId, setActiveStoreId] = useState(
+  const [activeStoreId,  setActiveStoreId]  = useState(
     () => localStorage.getItem('activeStoreId') || null
   );
   const [activeShopName, setActiveShopName] = useState(
@@ -25,23 +37,16 @@ export function AuthProvider({ children }) {
   );
 
   const login = (data) => {
-    // Save all user info to localStorage
-    localStorage.setItem('token',     data.token);
-    localStorage.setItem('userId',    data.userId    || '');
-    localStorage.setItem('userType',  data.userType  || '');
-    localStorage.setItem('storeId',   data.storeId   || '');
-    localStorage.setItem('shopName',  data.shopName  || '');
-    localStorage.setItem('name',      data.name      || '');
-    localStorage.setItem('companyId', data.companyId || '');
+    // Only token in localStorage — everything else from JWT decode
+    localStorage.setItem('token', data.token);
+
+    const decoded = decodeToken(data.token);
 
     setUser({
       token:     data.token,
-      userId:    data.userId,
-      userType:  data.userType,
-      storeId:   data.storeId,
-      shopName:  data.shopName,
-      name:      data.name,
-      companyId: data.companyId,
+      userId:    decoded?.userId,
+      userType:  decoded?.userType,
+      companyId: decoded?.companyId,
     });
   };
 
@@ -52,17 +57,17 @@ export function AuthProvider({ children }) {
     setActiveShopName(null);
   };
 
-  const switchStore = (storeId, shopName) => {
-    setActiveStoreId(storeId);
-    setActiveShopName(shopName);
-    localStorage.setItem('activeStoreId',  storeId);
-    localStorage.setItem('activeShopName', shopName);
+  const switchStore = (companyId, companyName) => {
+    setActiveStoreId(companyId);
+    setActiveShopName(companyName);
+    localStorage.setItem('activeStoreId',  companyId);
+    localStorage.setItem('activeShopName', companyName);
   };
 
-  // Super admin → switched store, Store admin → own store
-  const currentStoreId = user?.userType === 'super_admin' ? activeStoreId : user?.storeId;
+  // Super admin → switched store, Store admin → own companyId
+  const currentStoreId = user?.userType === 'super_admin' ? activeStoreId : user?.companyId;
 
-  // Role helpers — single source of truth
+  // Role helpers
   const isSuperAdmin = user?.userType === 'super_admin';
   const isStoreAdmin = user?.userType === 'store_admin';
   const canEdit      = isSuperAdmin;

@@ -15,7 +15,7 @@ const merchantSchema = new mongoose.Schema({
   companyId: { type: String, required: true, unique: true }, // slugified companyName = tenant DB name
   userId:    { type: String, required: true },
   status:    { type: String, enum: ['active', 'inactive'], default: 'active' },
-  feed_info: { type: feedInfoSchema, default: () => ({}) },
+  feed_info: { type: feedInfoSchema },
 }, { timestamps: true, collection: 'merchants' });
 
 module.exports = mongoose.model('Merchant', merchantSchema);

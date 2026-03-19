@@ -77,7 +77,16 @@ export default function ManageFeedSetup() {
 
   // ── Load existing config ─────────────────────────────────────────────────────
   useEffect(() => {
-    setFetching(true);
+  setFetching(true);
+  setFeedName("");
+  setCmsUpload("none");
+  setFeedFormat("Json");
+  setImportUrl("");
+  setSchedule("Daily");
+  setScheduleTime("06:00");
+  setHasExisting(false);
+  setTouched({});
+  setErrors({});
     const loadFeed = async () => {
       try {
         const res  = await API.get("/feeds");

@@ -11,36 +11,44 @@ const Field = ({ label, error, success, children }) => (
   <div className="space-y-1">
     <Label>{label}</Label>
     {children}
-    {error  && <p className="text-xs text-red-500 flex items-center gap-1 mt-1"><XCircle className="w-3 h-3 shrink-0" />{error}</p>}
+    {error   && <p className="text-xs text-red-500 flex items-center gap-1 mt-1"><XCircle className="w-3 h-3 shrink-0" />{error}</p>}
     {success && !error && <p className="text-xs text-green-600 flex items-center gap-1 mt-1"><CheckCircle2 className="w-3 h-3 shrink-0" />{success}</p>}
   </div>
 );
 
 const Signup = () => {
-  const [form, setForm] = useState({ shopName: '', name: '', phone: '', email: '', password: '', confirmPassword: '' });
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-  const [emailStatus, setEmailStatus] = useState(null); // 'checking' | 'taken' | 'available'
+  const [form, setForm] = useState({
+    companyName: '',
+    companyUrl:  '',
+    phone:       '',
+    email:       '',
+    password:    '',
+    confirmPassword: '',
+  });
+  const [errors,      setErrors]      = useState({});
+  const [touched,     setTouched]     = useState({});
+  const [emailStatus, setEmailStatus] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [serverError, setServerError] = useState('');
+  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [serverError,  setServerError]  = useState('');
   const navigate = useNavigate();
 
   const validate = (field, value, currentForm = form) => {
     switch (field) {
-      case 'shopName':
-        if (!value.trim()) return 'Shop name is required';
+      case 'companyName':
+        if (!value.trim()) return 'Company name is required';
         if (value.trim().length < 2) return 'Minimum 2 characters';
         return '';
-      case 'name':
-        if (!value.trim()) return 'Your name is required';
-        if (value.trim().length < 2) return 'Minimum 2 characters';
+      case 'companyUrl':
+        if (!value.trim()) return 'Company URL is required';
+        if (!/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/.test(value))
+          return 'Enter a valid company URL';
         return '';
-     case 'phone':
-      if (!value.trim()) return 'Phone number is required';  // ← ADD THIS
-      if (!/^\+?[\d\s\-()]{7,15}$/.test(value)) return 'Enter a valid phone number';
-      return '';
+      case 'phone':
+        if (!value.trim()) return 'Phone number is required';
+        if (!/^\+?[\d\s\-()]{7,15}$/.test(value)) return 'Enter a valid phone number';
+        return '';
       case 'email':
         if (!value.trim()) return 'Email is required';
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email address';
@@ -67,7 +75,10 @@ const Signup = () => {
     setForm(updated);
     if (touched[id]) setErrors(prev => ({ ...prev, [id]: validate(id, value, updated) }));
     if (id === 'password' && touched.confirmPassword)
-      setErrors(prev => ({ ...prev, confirmPassword: validate('confirmPassword', updated.confirmPassword, updated) }));
+      setErrors(prev => ({
+        ...prev,
+        confirmPassword: validate('confirmPassword', updated.confirmPassword, updated),
+      }));
   };
 
   const handleBlur = useCallback(async (e) => {
@@ -76,6 +87,7 @@ const Signup = () => {
     const error = validate(id, value);
     setErrors(prev => ({ ...prev, [id]: error }));
 
+    // Check email availability
     if (id === 'email' && !error && value) {
       setEmailStatus('checking');
       try {
@@ -87,13 +99,14 @@ const Signup = () => {
       }
     }
 
-    if (id === 'shopName' && !error && value.trim().length >= 2) {
+    // Check company name availability
+    if (id === 'companyName' && !error && value.trim().length >= 2) {
       try {
         const { data } = await API.get(
-          `/auth/check-shopname?shopName=${encodeURIComponent(value.trim())}`
+          `/auth/check-companyname?companyName=${encodeURIComponent(value.trim())}`
         );
         if (data.exists) {
-          setErrors(prev => ({ ...prev, shopName: 'This shop name is already taken' }));
+          setErrors(prev => ({ ...prev, companyName: 'This company name is already taken' }));
         }
       } catch {
         // silently ignore
@@ -103,7 +116,7 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const fields = ['shopName', 'name', 'phone', 'email', 'password', 'confirmPassword'];
+    const fields = ['companyName', 'companyUrl', 'phone', 'email', 'password', 'confirmPassword'];
     const newErrors = {};
     fields.forEach(f => { newErrors[f] = validate(f, form[f]); });
     setErrors(newErrors);
@@ -113,32 +126,39 @@ const Signup = () => {
     setServerError('');
     setLoading(true);
     try {
-      await API.post('/auth/signup', { shopName: form.shopName, name: form.name, phone: form.phone, email: form.email, password: form.password });
+      // Send companyName + companyUrl to backend
+      await API.post('/auth/signup', {
+        companyName: form.companyName,
+        companyUrl:  form.companyUrl,
+        phone:       form.phone,
+        email:       form.email,
+        password:    form.password,
+      });
       navigate('/login?registered=1');
     } catch (err) {
-    const message = err.response?.data?.message || 'Signup failed. Please try again.';
-    const field   = err.response?.data?.field;
-
-      if (field === 'shopName') {
-        // show error directly under the shopName input
-        setErrors(prev => ({ ...prev, shopName: message }));
-        setTouched(prev => ({ ...prev, shopName: true }));
+      const message = err.response?.data?.message || 'Signup failed. Please try again.';
+      const field   = err.response?.data?.field;
+      if (field === 'companyName') {
+        setErrors(prev => ({ ...prev, companyName: message }));
+        setTouched(prev => ({ ...prev, companyName: true }));
       } else {
         setServerError(message);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   const inputClass = (field) =>
-    touched[field] && errors[field] ? 'border-red-400 focus-visible:ring-red-300'
+    touched[field] && errors[field]  ? 'border-red-400 focus-visible:ring-red-300'
     : touched[field] && !errors[field] ? 'border-green-400 focus-visible:ring-green-300'
     : '';
 
   const strength = (() => {
     let s = 0;
-    if (form.password.length >= 8) s++;
-    if (/[A-Z]/.test(form.password)) s++;
-    if (/[0-9]/.test(form.password)) s++;
+    if (form.password.length >= 8)       s++;
+    if (/[A-Z]/.test(form.password))     s++;
+    if (/[0-9]/.test(form.password))     s++;
     if (/[^A-Za-z0-9]/.test(form.password)) s++;
     return s;
   })();
@@ -162,46 +182,93 @@ const Signup = () => {
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Shop Name *" error={touched.shopName && errors.shopName}>
-                  <Input id="shopName" placeholder="e.g. Surya Electronics"
-                    value={form.shopName} onChange={handleChange} onBlur={handleBlur}
-                    className={inputClass('shopName')} />
+                {/* Company Name */}
+                <Field
+                  label="Company Name *"
+                  error={touched.companyName && errors.companyName}
+                >
+                  <Input
+                    id="companyName"
+                    placeholder="e.g. Hari Electronics"
+                    value={form.companyName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    className={inputClass('companyName')}
+                  />
                 </Field>
-                <Field label="Your Name *" error={touched.name && errors.name}>
-                  <Input id="name" placeholder="Full name"
-                    value={form.name} onChange={handleChange} onBlur={handleBlur}
-                    className={inputClass('name')} />
+
+                {/* Company URL */}
+                <Field
+                  label="Company URL *"
+                  error={touched.companyUrl && errors.companyUrl}
+                >
+                  <Input
+                    id="companyUrl"
+                    placeholder="e.g. harielectronics.com"
+                    value={form.companyUrl}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    className={inputClass('companyUrl')}
+                  />
                 </Field>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Email *" error={touched.email && errors.email}
-                  success={emailStatus === 'available' ? 'Email is available' : ''}>
+                {/* Email */}
+                <Field
+                  label="Email *"
+                  error={touched.email && errors.email}
+                  success={emailStatus === 'available' ? 'Email is available' : ''}
+                >
                   <div className="relative">
-                    <Input id="email" type="email" placeholder="you@example.com"
-                      value={form.email} onChange={handleChange} onBlur={handleBlur}
-                      className={`pr-8 ${inputClass('email')}`} />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={form.email}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={`pr-8 ${inputClass('email')}`}
+                    />
                     {emailStatus === 'checking' && (
                       <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
                     )}
                   </div>
                 </Field>
-                <Field label="Phone Number" error={touched.phone && errors.phone}>
-                  <Input id="phone" type="tel" placeholder="+91 98765 43210"
-                      value={form.phone} onChange={handleChange} onBlur={handleBlur}
-                      inputMode="numeric"   
-                      maxLength={15}        
-                      className={inputClass('phone')} />
+
+                {/* Phone */}
+                <Field label="Phone Number *" error={touched.phone && errors.phone}>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={form.phone}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    inputMode="numeric"
+                    maxLength={15}
+                    className={inputClass('phone')}
+                  />
                 </Field>
               </div>
 
+              {/* Password */}
               <Field label="Password *" error={touched.password && errors.password}>
                 <div className="relative">
-                  <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Min. 8 chars, 1 uppercase, 1 number"
-                    value={form.password} onChange={handleChange} onBlur={handleBlur}
-                    className={`pr-10 ${inputClass('password')}`} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Min. 8 chars, 1 uppercase, 1 number"
+                    value={form.password}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    className={`pr-10 ${inputClass('password')}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -223,14 +290,27 @@ const Signup = () => {
                 )}
               </Field>
 
-              <Field label="Confirm Password *" error={touched.confirmPassword && errors.confirmPassword}
-                success={touched.confirmPassword && !errors.confirmPassword && form.confirmPassword ? 'Passwords match' : ''}>
+              {/* Confirm Password */}
+              <Field
+                label="Confirm Password *"
+                error={touched.confirmPassword && errors.confirmPassword}
+                success={touched.confirmPassword && !errors.confirmPassword && form.confirmPassword ? 'Passwords match' : ''}
+              >
                 <div className="relative">
-                  <Input id="confirmPassword" type={showConfirm ? 'text' : 'password'} placeholder="Re-enter your password"
-                    value={form.confirmPassword} onChange={handleChange} onBlur={handleBlur}
-                    className={`pr-10 ${inputClass('confirmPassword')}`} />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirm ? 'text' : 'password'}
+                    placeholder="Re-enter your password"
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    className={`pr-10 ${inputClass('confirmPassword')}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -243,7 +323,10 @@ const Signup = () => {
               )}
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account...</> : 'Create Account'}
+                {loading
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating account...</>
+                  : 'Create Account'
+                }
               </Button>
 
               <p className="text-center text-sm text-slate-500">
