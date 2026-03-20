@@ -115,21 +115,26 @@ function MyAccountTab({ user }) {
     }
   };
 
-  const handlePasswordUpdate = async () => {
-    if (newPassword !== confirmPass) { toast.error("Passwords do not match"); return; }
-    if (newPassword.length < 8) { toast.error("Password must be at least 8 characters"); return; }
-    setSavingPass(true);
-    try {
-      await API.put("/settings/password", { oldPassword, newPassword });
-      toast.success("Password updated successfully!");
-      setOldPassword(""); setNewPassword(""); setConfirmPass("");
-    } catch {
-      toast.error("Failed to update password");
-    } finally {
-      setSavingPass(false);
-    }
-  };
+ const handlePasswordUpdate = async () => {
+  // Validation
+  if (!newPassword) { toast.error("New password is required"); return; }
+  if (newPassword.length < 8) { toast.error("Minimum 8 characters"); return; }
+  if (!/[A-Z]/.test(newPassword)) { toast.error("Must contain at least one uppercase letter"); return; }
+  if (!/[0-9]/.test(newPassword)) { toast.error("Must contain at least one number"); return; }
+  if (newPassword !== confirmPass) { toast.error("Passwords do not match"); return; }
 
+  setSavingPass(true);
+  try {
+    await API.put("/settings/password", { newPassword });
+    toast.success("Password updated successfully!");
+    setNewPassword("");
+    setConfirmPass("");
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Failed to update password");
+  } finally {
+    setSavingPass(false);
+  }
+};
   // Readonly fields — store_admin shows companyName, user shows userName
   const readonlyFields = isUser
     ? [
@@ -212,86 +217,53 @@ function MyAccountTab({ user }) {
         </div>
 
         {/* Password Section */}
-        <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            {isUser ? "Password" : "Update Password"}
-          </h3>
+        
+<div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+    Update Password
+  </h3>
 
-          <div className="space-y-3">
-            {/* user → current password view only | store_admin → editable */}
-            {isUser ? (
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type={showCurrent ? "text" : "password"}
-                  value={currentPass}
-                  disabled
-                  readOnly
-                  placeholder="Current Password"
-                  className="pl-10 pr-10 bg-secondary/50 border-0 text-muted-foreground cursor-not-allowed"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrent(!showCurrent)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type={showOld ? "text" : "password"}
-                  value={oldPassword}
-                  onChange={e => setOldPassword(e.target.value)}
-                  placeholder="Current Password"
-                  className="pl-10 pr-10"
-                />
-                <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  {showOld ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            )}
+  <div className="space-y-3">
+    {/* New password */}
+    <div className="relative">
+      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        type={showNew ? "text" : "password"}
+        value={newPassword}
+        onChange={e => setNewPassword(e.target.value)}
+        placeholder="New Password"
+        className="pl-10 pr-10"
+      />
+      <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+        {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
 
-            {/* New password */}
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type={showNew ? "text" : "password"}
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="New Password"
-                className="pl-10 pr-10"
-              />
-              <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+    {/* Confirm password */}
+    <div className="relative">
+      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        type={showConfirm ? "text" : "password"}
+        value={confirmPass}
+        onChange={e => setConfirmPass(e.target.value)}
+        placeholder="Confirm Password"
+        className="pl-10 pr-10"
+      />
+      <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+        {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  </div>
 
-            {/* Confirm password */}
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type={showConfirm ? "text" : "password"}
-                value={confirmPass}
-                onChange={e => setConfirmPass(e.target.value)}
-                placeholder="Confirm Password"
-                className="pl-10 pr-10"
-              />
-              <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handlePasswordUpdate} disabled={savingPass} size="sm" className="gap-2">
-              {savingPass ? "Updating..." : <><Check className="h-3.5 w-3.5" /> Update Password</>}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setOldPassword(""); setNewPassword(""); setConfirmPass(""); }}>Cancel</Button>
-          </div>
-        </div>
+  <div className="flex gap-2 pt-2">
+    <Button onClick={handlePasswordUpdate} disabled={savingPass} size="sm" className="gap-2">
+      {savingPass ? "Updating..." : <><Check className="h-3.5 w-3.5" /> Update Password</>}
+    </Button>
+    <Button size="sm" variant="ghost" onClick={() => { setNewPassword(""); setConfirmPass(""); }}>
+      Cancel
+    </Button>
+  </div>
+</div>
 
       </div>
     </motion.div>
@@ -585,7 +557,7 @@ function ManageUsersTab({ user }) {
 
 // Users Log Tab — only for store_admin and super_admin
 function UsersLogTab() {
-  const [logs, setLogs] = useState([]);
+  const [logs,    setLogs]    = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -603,16 +575,15 @@ function UsersLogTab() {
   }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-2xl overflow-hidden"
-    >
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl overflow-hidden">
+      {/* Table header */}
       <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-secondary/40 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        <div className="col-span-4">User</div>
-        <div className="col-span-4">Action</div>
+        <div className="col-span-4">Email</div>
+        <div className="col-span-2">Role</div>
+        <div className="col-span-2">Company</div>
         <div className="col-span-4">Date</div>
       </div>
+
       {loading ? (
         <div className="py-12 flex items-center justify-center">
           <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -624,16 +595,12 @@ function UsersLogTab() {
         </div>
       ) : (
         logs.map((log, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-12 gap-4 px-5 py-3.5 border-b border-border last:border-0 text-sm hover:bg-secondary/20 transition-colors"
-          >
-            <div className="col-span-4 text-foreground truncate">
-              {log.email}
-            </div>
-            <div className="col-span-4 text-muted-foreground">{log.action}</div>
+          <div key={i} className="grid grid-cols-12 gap-4 px-5 py-3.5 border-b border-border last:border-0 text-sm hover:bg-secondary/20 transition-colors">
+            <div className="col-span-4 text-foreground truncate">{log.email}</div>
+            <div className="col-span-2 text-muted-foreground capitalize">{log.userType}</div>
+            <div className="col-span-2 text-muted-foreground truncate">{log.companyId}</div>
             <div className="col-span-4 text-muted-foreground text-xs">
-              {new Date(log.createdAt).toLocaleString()}
+              {new Date(log.loginAt).toLocaleString()}
             </div>
           </div>
         ))

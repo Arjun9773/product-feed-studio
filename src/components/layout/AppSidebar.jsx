@@ -85,23 +85,7 @@ export function AppSidebar({ open, onToggle }) {
             </NavLink>
           );
         })}
-      </nav>
-
-      {/* Settings — bottom-ல தனியா */}
-      <div className="px-3 pb-4 border-t border-sidebar-border pt-3">
-        <NavLink
-          to="/settings"
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-all duration-150",
-            location.pathname === "/settings"
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground hover:bg-accent hover:text-foreground"
-          )}
-        >
-          <Settings className="h-5 w-5 shrink-0" />
-          {open && <span className="truncate">Settings</span>}
-        </NavLink>
-      </div>
+      </nav>    
     </aside>
-  );
+  );       
 }
