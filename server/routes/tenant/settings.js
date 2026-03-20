@@ -4,6 +4,9 @@ const auth = require('../../middleware/auth');
 const User = require('../../models/User');
 const Access = require('../../models/Access');
 const Company = require('../../models/Company');
+const multer = require('multer');
+const path   = require('path');
+const fs     = require('fs');
 
 const router = express.Router();
 
@@ -246,5 +249,68 @@ router.get('/users-log', auth, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+// Create uploads folder if not exists
+const uploadDir = path.join(__dirname, '../../../uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// Multer storage config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename:    (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${req.user.userId}_${Date.now()}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    allowed.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error('Only jpeg/png/webp allowed'));
+  }
+});
+
+// POST /api/settings/upload-photo
+router.post('/upload-photo', auth, upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+    const photoPath = `/uploads/${req.file.filename}`;
+
+    await User.findOneAndUpdate(
+      { userId: req.user.userId },
+      { $set: { photoPath, updatedAt: new Date() } }
+    );
+
+    res.json({ message: 'Photo uploaded', photoPath });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+       
+// DELETE /api/settings/remove-photo
+router.delete('/remove-photo', auth, async (req, res) => {
+  try {
+    // Get old photo path to delete file
+    const user = await User.findOne({ userId: req.user.userId });
+    if (user?.photoPath) {
+      const filePath = path.join(uploadDir, path.basename(user.photoPath));
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    await User.findOneAndUpdate(
+      { userId: req.user.userId },
+      { $set: { photoPath: '', updatedAt: new Date() } }
+    );
+
+    res.json({ message: 'Photo removed' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 
 module.exports = router;

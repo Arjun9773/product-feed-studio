@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
   email:      { type: String, required: true, unique: true, lowercase: true },
   password:   { type: String, required: true },
   phone:      { type: String, default: '' },
+  photoPath: { type: String, default: '' },
   userType:   { type: String, enum: ['super_admin', 'store_admin','user'], default: 'store_admin' },
 }, { timestamps: true, collection: 'users' });
 

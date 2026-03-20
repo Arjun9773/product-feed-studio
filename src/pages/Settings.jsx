@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -19,6 +19,7 @@ import {
   Users,
   FileText,
   Upload,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,9 @@ function MyAccountTab({ user }) {
   const [saving, setSaving] = useState(false);
   const [savingPass, setSavingPass] = useState(false);
   const [currentPass, setCurrentPass] = useState("••••••••");
+  const [photoPath, setPhotoPath] = useState("");
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const isUser = user?.userType === "user";
 
@@ -84,6 +88,7 @@ function MyAccountTab({ user }) {
         setUserType(data.userType || "");
         setPhone(data.phone || "");
         setCurrentPass(data.password || "••••••••");
+        setPhotoPath(data.photoPath || "");
 
         if (data.userType === "user") {
           // user → show userName in name field
@@ -102,6 +107,44 @@ function MyAccountTab({ user }) {
     };
     loadProfile();
   }, [user?.userId]);
+
+  // const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be under 2MB");
+      return;
+    }
+
+    setPhotoLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const res = await API.post("/settings/upload-photo", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setPhotoPath(res.data.photoPath);
+      toast.success("Photo uploaded!");
+    } catch {
+      toast.error("Failed to upload photo");
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      await API.delete("/settings/remove-photo");
+      setPhotoPath("");
+      toast.success("Photo removed!");
+    } catch {
+      toast.error("Failed to remove photo");
+    }
+  };
 
   const handleUpdate = async () => {
     if (!phone.trim()) {
@@ -189,34 +232,72 @@ function MyAccountTab({ user }) {
           Profile Photo
         </h3>
         <div className="flex items-center gap-6">
-          <div className="relative group">
-            <Avatar
-              companyName={companyName || userName}
-              companyUrl={companyUrl}
-              size="lg"
-            />
-            <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-              <Camera className="h-5 w-5 text-white" />
+          <div
+            className="relative group cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {photoPath ? (
+              <img
+                src={`${photoPath}`}
+                alt="Profile"
+                className="h-24 w-24 rounded-2xl object-cover shadow-lg"
+              />
+            ) : (
+              <Avatar
+                companyName={companyName || userName}
+                companyUrl={companyUrl}
+                size="lg"
+              />
+            )}
+            <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {photoLoading ? (
+                <Loader2 className="h-5 w-5 text-white animate-spin" />
+              ) : (
+                <Camera className="h-5 w-5 text-white" />
+              )}
             </div>
           </div>
+
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
               Upload your company logo
             </p>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="gap-2 text-xs">
-                <Upload className="h-3.5 w-3.5" /> Upload Photo
-              </Button>
               <Button
                 size="sm"
-                variant="ghost"
-                className="gap-2 text-xs text-destructive hover:text-destructive"
+                variant="outline"
+                className="gap-2 text-xs"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={photoLoading}
               >
-                <Trash2 className="h-3.5 w-3.5" /> Remove
+                <Upload className="h-3.5 w-3.5" />
+                {photoLoading ? "Uploading..." : "Upload Photo"}
               </Button>
+              {photoPath && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-2 text-xs text-destructive hover:text-destructive"
+                  onClick={handleRemovePhoto}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Remove
+                </Button>
+              )}
             </div>
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG, WebP — max 2MB
+            </p>
           </div>
         </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handlePhotoUpload}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
