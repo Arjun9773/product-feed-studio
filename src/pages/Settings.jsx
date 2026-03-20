@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -53,39 +54,38 @@ function Avatar({ companyName, companyUrl, size = "lg" }) {
 
 // My Account Tab — visible to all user types
 function MyAccountTab({ user }) {
-  const [email,       setEmail]       = useState("");
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [companyUrl,  setCompanyUrl]  = useState("");
-  const [userType,    setUserType]    = useState("");
-  const [userName,    setUserName]    = useState("");
-  const [phone,       setPhone]       = useState("");
-  const [oldPassword, setOldPassword] = useState("");
+  const [companyUrl, setCompanyUrl] = useState("");
+  const [userType, setUserType] = useState("");
+  const [userName, setUserName] = useState("");
+  const [phone, setPhone] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
-  const [showOld,     setShowOld]     = useState(false);
-  const [showNew,     setShowNew]     = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [saving,      setSaving]      = useState(false);
-  const [savingPass,  setSavingPass]  = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savingPass, setSavingPass] = useState(false);
   const [currentPass, setCurrentPass] = useState("••••••••");
-  const [showCurrent, setShowCurrent] = useState(false);
 
-  const isUser = user?.userType === 'user';
+  const isUser = user?.userType === "user";
 
   // Load profile from DB on mount
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const res  = await API.get("/settings/profile");
+        const res = await API.get("/settings/profile");
         const data = res.data;
 
-        setEmail(data.email       || "");
+        setEmail(data.email || "");
         setCompanyUrl(data.companyUrl || "");
-        setUserType(data.userType   || "");
-        setPhone(data.phone         || "");
+        setUserType(data.userType || "");
+        setPhone(data.phone || "");
         setCurrentPass(data.password || "••••••••");
 
-        if (data.userType === 'user') {
+        if (data.userType === "user") {
           // user → show userName in name field
           setUserName(data.userName || "");
           setCompanyName("");
@@ -104,6 +104,14 @@ function MyAccountTab({ user }) {
   }, [user?.userId]);
 
   const handleUpdate = async () => {
+    if (!phone.trim()) {
+      toast.error("Phone number is required");
+      return;
+    }
+    if (!/^\d{10}$/.test(phone.trim())) {
+      toast.error("Phone number must be exactly 10 digits");
+      return;
+    }
     setSaving(true);
     try {
       await API.put("/settings/profile", { phone });
@@ -115,69 +123,108 @@ function MyAccountTab({ user }) {
     }
   };
 
- const handlePasswordUpdate = async () => {
-  // Validation
-  if (!newPassword) { toast.error("New password is required"); return; }
-  if (newPassword.length < 8) { toast.error("Minimum 8 characters"); return; }
-  if (!/[A-Z]/.test(newPassword)) { toast.error("Must contain at least one uppercase letter"); return; }
-  if (!/[0-9]/.test(newPassword)) { toast.error("Must contain at least one number"); return; }
-  if (newPassword !== confirmPass) { toast.error("Passwords do not match"); return; }
+  const handlePasswordUpdate = async () => {
+    // Validation
+    if (!newPassword) {
+      toast.error("New password is required");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("Minimum 8 characters");
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      toast.error("Must contain at least one uppercase letter");
+      return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      toast.error("Must contain at least one number");
+      return;
+    }
+    if (newPassword !== confirmPass) {
+      toast.error("Passwords do not match");
+      return;
+    }
 
-  setSavingPass(true);
-  try {
-    await API.put("/settings/password", { newPassword });
-    toast.success("Password updated successfully!");
-    setNewPassword("");
-    setConfirmPass("");
-  } catch (err) {
-    toast.error(err.response?.data?.message || "Failed to update password");
-  } finally {
-    setSavingPass(false);
-  }
-};
+    setSavingPass(true);
+    try {
+      await API.put("/settings/password", { newPassword });
+      toast.success("Password updated successfully!");
+      setNewPassword("");
+      setConfirmPass("");
+      setTimeout(() => {
+        logout();
+        navigate("/login");
+      }, 2000);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update password");
+    } finally {
+      setSavingPass(false);
+    }
+  };
   // Readonly fields — store_admin shows companyName, user shows userName
   const readonlyFields = isUser
     ? [
-        { icon: Mail,   value: email,      placeholder: "Email" },
-        { icon: Shield, value: userType,   placeholder: "Role" },
-        { icon: User,   value: userName,   placeholder: "User Name" },
-        { icon: Globe,  value: companyUrl, placeholder: "Company URL" },
+        { icon: Mail, value: email, placeholder: "Email" },
+        { icon: Shield, value: userType, placeholder: "Role" },
+        { icon: User, value: userName, placeholder: "User Name" },
+        { icon: Globe, value: companyUrl, placeholder: "Company URL" },
       ]
     : [
-        { icon: Mail,   value: email,       placeholder: "Email" },
-        { icon: Shield, value: userType,    placeholder: "Role" },
-        { icon: User,   value: companyName, placeholder: "Company Name" },
-        { icon: Globe,  value: companyUrl,  placeholder: "Company URL" },
+        { icon: Mail, value: email, placeholder: "Email" },
+        { icon: Shield, value: userType, placeholder: "Role" },
+        { icon: User, value: companyName, placeholder: "Company Name" },
+        { icon: Globe, value: companyUrl, placeholder: "Company URL" },
       ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6"
+    >
       {/* Profile Photo */}
       <div className="bg-card border border-border rounded-2xl p-6">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-5">Profile Photo</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-5">
+          Profile Photo
+        </h3>
         <div className="flex items-center gap-6">
           <div className="relative group">
-            <Avatar companyName={companyName || userName} companyUrl={companyUrl} size="lg" />
+            <Avatar
+              companyName={companyName || userName}
+              companyUrl={companyUrl}
+              size="lg"
+            />
             <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
               <Camera className="h-5 w-5 text-white" />
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Upload your company logo</p>
+            <p className="text-sm text-muted-foreground">
+              Upload your company logo
+            </p>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="gap-2 text-xs"><Upload className="h-3.5 w-3.5" /> Upload Photo</Button>
-              <Button size="sm" variant="ghost" className="gap-2 text-xs text-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /> Remove</Button>
+              <Button size="sm" variant="outline" className="gap-2 text-xs">
+                <Upload className="h-3.5 w-3.5" /> Upload Photo
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-2 text-xs text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remove
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
         {/* Basic Information */}
         <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Basic Information</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Basic Information
+          </h3>
 
           {/* Readonly fields */}
           <div className="space-y-3">
@@ -201,70 +248,122 @@ function MyAccountTab({ user }) {
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="Phone number"
+                onChange={(e) => {
+                  // Only allow numbers, max 10 digits
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setPhone(val);
+                }}
+                placeholder="Phone number (10 digits)"
                 className="pl-10"
+                maxLength={10}
+                inputMode="numeric"
               />
             </div>
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleUpdate} disabled={saving} size="sm" className="gap-2">
-              {saving ? "Saving..." : <><Check className="h-3.5 w-3.5" /> Update</>}
+            <Button
+              onClick={handleUpdate}
+              disabled={saving}
+              size="sm"
+              className="gap-2"
+            >
+              {saving ? (
+                "Saving..."
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5" /> Update
+                </>
+              )}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setPhone("")}>Cancel</Button>
+            <Button size="sm" variant="ghost" onClick={() => setPhone("")}>
+              Cancel
+            </Button>
           </div>
         </div>
 
         {/* Password Section */}
-        
-<div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-    Update Password
-  </h3>
 
-  <div className="space-y-3">
-    {/* New password */}
-    <div className="relative">
-      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input
-        type={showNew ? "text" : "password"}
-        value={newPassword}
-        onChange={e => setNewPassword(e.target.value)}
-        placeholder="New Password"
-        className="pl-10 pr-10"
-      />
-      <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-        {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </button>
-    </div>
+        <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Update Password
+          </h3>
 
-    {/* Confirm password */}
-    <div className="relative">
-      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input
-        type={showConfirm ? "text" : "password"}
-        value={confirmPass}
-        onChange={e => setConfirmPass(e.target.value)}
-        placeholder="Confirm Password"
-        className="pl-10 pr-10"
-      />
-      <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-        {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-      </button>
-    </div>
-  </div>
+          <div className="space-y-3">
+            {/* New password */}
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type={showNew ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New Password"
+                className="pl-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew(!showNew)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showNew ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
 
-  <div className="flex gap-2 pt-2">
-    <Button onClick={handlePasswordUpdate} disabled={savingPass} size="sm" className="gap-2">
-      {savingPass ? "Updating..." : <><Check className="h-3.5 w-3.5" /> Update Password</>}
-    </Button>
-    <Button size="sm" variant="ghost" onClick={() => { setNewPassword(""); setConfirmPass(""); }}>
-      Cancel
-    </Button>
-  </div>
-</div>
+            {/* Confirm password */}
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type={showConfirm ? "text" : "password"}
+                value={confirmPass}
+                onChange={(e) => setConfirmPass(e.target.value)}
+                placeholder="Confirm Password"
+                className="pl-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showConfirm ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
 
+          <div className="flex gap-2 pt-2">
+            <Button
+              onClick={handlePasswordUpdate}
+              disabled={savingPass}
+              size="sm"
+              className="gap-2"
+            >
+              {savingPass ? (
+                "Updating..."
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5" /> Update Password
+                </>
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setNewPassword("");
+                setConfirmPass("");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       </div>
     </motion.div>
   );
@@ -557,7 +656,7 @@ function ManageUsersTab({ user }) {
 
 // Users Log Tab — only for store_admin and super_admin
 function UsersLogTab() {
-  const [logs,    setLogs]    = useState([]);
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -575,7 +674,11 @@ function UsersLogTab() {
   }, []);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-2xl overflow-hidden"
+    >
       {/* Table header */}
       <div className="grid grid-cols-12 gap-4 px-5 py-3 bg-secondary/40 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
         <div className="col-span-4">Email</div>
@@ -595,10 +698,19 @@ function UsersLogTab() {
         </div>
       ) : (
         logs.map((log, i) => (
-          <div key={i} className="grid grid-cols-12 gap-4 px-5 py-3.5 border-b border-border last:border-0 text-sm hover:bg-secondary/20 transition-colors">
-            <div className="col-span-4 text-foreground truncate">{log.email}</div>
-            <div className="col-span-2 text-muted-foreground capitalize">{log.userType}</div>
-            <div className="col-span-2 text-muted-foreground truncate">{log.companyId}</div>
+          <div
+            key={i}
+            className="grid grid-cols-12 gap-4 px-5 py-3.5 border-b border-border last:border-0 text-sm hover:bg-secondary/20 transition-colors"
+          >
+            <div className="col-span-4 text-foreground truncate">
+              {log.email}
+            </div>
+            <div className="col-span-2 text-muted-foreground capitalize">
+              {log.userType}
+            </div>
+            <div className="col-span-2 text-muted-foreground truncate">
+              {log.companyId}
+            </div>
             <div className="col-span-4 text-muted-foreground text-xs">
               {new Date(log.loginAt).toLocaleString()}
             </div>
