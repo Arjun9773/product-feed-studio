@@ -10,7 +10,7 @@ async function seedAdmin() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('Connected to MongoDB');
 
-  const mainDb = mongoose.connection.useDb('gmc_main_admin_db');
+  const mainDb = mongoose.connection.useDb('ddf_admin_info');
 
   // Check if super admin already exists in users collection
   const exists = await mainDb.collection('users').findOne({ userType: 'super_admin' });

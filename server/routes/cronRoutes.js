@@ -17,7 +17,7 @@ router.post('/run-now/:tenantId', async (req, res) => {
   try {
     const { tenantId } = req.params;
 
-    const mainDb  = require('mongoose').connection.useDb('gmc_main_admin_db');
+    const mainDb  = require('mongoose').connection.useDb(process.env.MAIN_DB_NAME); // ✅ FIXED: uses MAIN_DB_NAME from .env — not hardcoded
     const company = await mainDb.collection('gmc_admin_companies')
       .findOne({ store_id: tenantId });
 

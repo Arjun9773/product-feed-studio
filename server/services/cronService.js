@@ -2,7 +2,7 @@
 const cron     = require('node-cron');
 const axios    = require('axios');
 const mongoose = require('mongoose');
-const { getTenantDb } = require('../config/db');
+const { getMainDb, getTenantDb } = require('../config/db');
 
 // ─── SCHEMAS ─────────────────────────────────────────────────
 const ProductSchema          = require('../models/Product');
@@ -580,7 +580,7 @@ async function initAllCrons() {
   try {
     console.log('[CRON] 🚀 Initializing all cron jobs...');
 
-    const mainDb    = mongoose.connection.useDb('gmc_main_admin_db');
+    const mainDb    = getMainDb();
     const merchants = await mainDb.collection('merchants')
       .find({ status: 'active' })
       .toArray();

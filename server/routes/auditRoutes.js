@@ -31,7 +31,11 @@ router.get('/feed-audit', verifyToken, async (req, res) => {
       is_active: true,
     });
 
+    console.log('[AUDIT] tenantId:', tenantId);
+    console.log('[AUDIT] totalProducts:', totalProducts);
+
     const auditDocs = await auditCol.find({}).toArray();
+    console.log('[AUDIT] sample product keys:', sampleProduct ? Object.keys(sampleProduct) : 'NO DOCS');
 
     const grouped = { high: {}, medium: {}, low: {}, others: {} };
 
@@ -83,6 +87,7 @@ router.get('/feed-audit', verifyToken, async (req, res) => {
 
 // POST /api/audit/refresh
 router.post('/refresh', verifyToken, async (req, res) => {
+  console.log('[AUDIT REFRESH] Request received from user:', req.user.email);
   try {
     const { role, store_id } = req.user;
 
@@ -97,8 +102,8 @@ router.post('/refresh', verifyToken, async (req, res) => {
       });
     }
 
-    const mainDb  = mongoose.connection.useDb('gmc_main_admin_db');
-    const company = await mainDb.collection('gmc_admin_companies')
+    const mainDb  = mongoose.connection.useDb(process.env.MAIN_DB_NAME); // ✅ FIXED: uses MAIN_DB_NAME from .env — not hardcoded
+    const company = await mainDb.collection('companies')
       .findOne({ store_id: tenantId });
 
     if (!company) {
@@ -136,8 +141,8 @@ router.get('/stores', verifyToken, async (req, res) => {
       });
     }
 
-    const mainDb    = mongoose.connection.useDb('gmc_main_admin_db');
-    const companies = await mainDb.collection('gmc_admin_companies')
+    const mainDb    = mongoose.connection.useDb(process.env.MAIN_DB_NAME); // ✅ FIXED: uses MAIN_DB_NAME from .env — not hardcoded
+    const companies = await mainDb.collection('companies')
       .find({ role: 'store_admin' })
       .project({ store_id: 1, shopName: 1, _id: 0 })
       .toArray();

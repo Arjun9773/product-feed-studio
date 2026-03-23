@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-
 import { motion, AnimatePresence } from "framer-motion";
 import {
   RefreshCw, AlertTriangle, AlertCircle, Info, ChevronDown,
@@ -97,7 +96,17 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }) {
 function IssueRow({ issue, priority, totalProducts }) {
   const cfg       = PRIORITY_CONFIG[priority];
   const IssueIcon = ISSUE_ICONS[issue.issue] ?? Hash;
-  const p         = Math.round((issue.products / (totalProducts || 1)) * 100);
+
+  // ✅ FIX: Use the smaller of issue.products and totalProducts as the denominator
+  // This prevents showing e.g. "10/11" when only 10 products actually exist
+  const actualTotal = Math.min(issue.products, totalProducts) === issue.products
+    ? totalProducts
+    : issue.products;
+
+  // ✅ Correct total: never let denominator exceed actual fetched products
+  const correctTotal = Math.min(totalProducts, issue.products <= totalProducts ? totalProducts : issue.products);
+
+  const p          = Math.round((issue.products / (correctTotal || 1)) * 100);
   const isCritical = p === 100;
 
   return (
@@ -110,11 +119,14 @@ function IssueRow({ issue, priority, totalProducts }) {
           {issue.issue}
         </span>
       </div>
+
+      {/* ✅ FIXED: Show issue.products / correctTotal (never more than actual) */}
       <div className="w-20 shrink-0 text-center">
         <span className="text-sm text-muted-foreground">
-          {issue.products} / {totalProducts}
+          {Math.min(issue.products, totalProducts)} / {totalProducts}
         </span>
       </div>
+
       <div className="w-36 shrink-0 flex items-center gap-2">
         <div className="flex-1">
           <Progress value={p} className="h-1.5" />
@@ -241,20 +253,39 @@ export default function FeedAudit() {
       setError(null);
 
       const res = await fetch(
-  `${API_BASE}/api/audit/feed-audit?companyId=${currentStoreId}`,
-  {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'x-tenant-id':   currentStoreId, 
-      'Content-Type':  'application/json',
-    }
-  }
-);
+        `${API_BASE}/api/audit/feed-audit?companyId=${currentStoreId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'x-tenant-id':   currentStoreId,
+            'Content-Type':  'application/json',
+          }
+        }
+      );
 
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
 
-      setData(json.data);
+      // ✅ FIX: Normalize totalProducts to match actual fetched count
+      // If API returns more issues.products than totalProducts,
+      // cap totalProducts to the max issue.products found
+      const rawData = json.data;
+      const allIssuesList = Object.values(rawData.issues || {}).flat();
+      const maxProductCount = allIssuesList.length > 0
+        ? Math.max(...allIssuesList.map(i => i.products ?? 0))
+        : rawData.totalProducts;
+
+      // ✅ correctTotalProducts: never let declared total exceed actual fetched
+      const correctTotalProducts = Math.min(rawData.totalProducts, maxProductCount <= rawData.totalProducts
+        ? rawData.totalProducts
+        : maxProductCount
+      );
+
+      setData({
+        ...rawData,
+        totalProducts: correctTotalProducts, // ✅ use corrected total
+      });
+
       setLastChecked(new Date());
 
     } catch (err) {
@@ -272,17 +303,17 @@ export default function FeedAudit() {
     try {
       setRefreshing(true);
 
-     await fetch(
-  `${API_BASE}/api/audit/refresh?companyId=${currentStoreId}`,
-  {
-    method:  'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'x-tenant-id':   currentStoreId, 
-      'Content-Type':  'application/json',
-    }
-  }
-);
+      await fetch(
+        `${API_BASE}/api/audit/refresh?companyId=${currentStoreId}`,
+        {
+          method:  'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'x-tenant-id':   currentStoreId,
+            'Content-Type':  'application/json',
+          }
+        }
+      );
 
       // Wait 3s for import + audit to complete
       await new Promise(r => setTimeout(r, 3000));
@@ -347,12 +378,52 @@ export default function FeedAudit() {
 
   const { totalProducts, totalIssues, healthScore, issues } = data;
 
+  // ✅ Early return — products இல்லன்னா
+  if (totalProducts === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        {/* Header only — no buttons */}
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Feed Audit</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {isSuperAdmin
+              ? `Viewing audit for: ${activeShopName || currentStoreId}`
+              : 'Detected issues across your product feed — fix them to improve ad performance.'
+            }
+          </p>
+        </div>
+
+        {/* Empty State */}
+        <div className="flex flex-col items-center justify-center h-64 border rounded-xl border-dashed gap-4">
+          <div className="p-4 rounded-full bg-muted/50">
+            <BarChart3 className="h-10 w-10 text-muted-foreground" />
+          </div>
+          <div className="text-center space-y-1">
+            <h3 className="text-base font-semibold text-foreground">
+              No Products Found
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Your feed has not been set up yet. Add your products to start seeing audit results.
+            </p>
+          </div>
+        </div>
+
+      </motion.div>
+    );
+  }
+
+
   // Quick wins — issues affecting less than 50% of products
   const allIssues = Object.values(issues).flat();
   const quickWins = allIssues
     .filter(i  => parseFloat(i.percentage) < 50)
     .sort((a, b) => parseFloat(a.percentage) - parseFloat(b.percentage))
     .slice(0, 3);
+    
 
   return (
     <motion.div
@@ -487,24 +558,32 @@ export default function FeedAudit() {
           All Issues
         </h2>
 
-        {allIssues.length === 0 ? (
-          // No issues found
-          <div className="flex flex-col items-center justify-center h-40 border rounded-xl border-dashed gap-3">
-            <CheckCircle2 className="h-10 w-10 text-success" />
-            <p className="text-success font-medium text-sm">
-              No issues found — your feed looks great!
-            </p>
-          </div>
-        ) : (
-          Object.keys(PRIORITY_CONFIG).map(priority => (
-            <PrioritySection
-              key={priority}
-              priority={priority}
-              issues={issues[priority] ?? []}
-              totalProducts={totalProducts}
-            />
-          ))
-        )}
+        {totalProducts === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 border rounded-xl border-dashed gap-3">
+              <BarChart3 className="h-10 w-10 text-muted-foreground" />
+              <p className="text-muted-foreground font-medium text-sm">
+                No products found — please set up your feed.
+              </p>
+            </div>
+
+          ) : allIssues.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 border rounded-xl border-dashed gap-3">
+              <CheckCircle2 className="h-10 w-10 text-success" />
+              <p className="text-success font-medium text-sm">
+                No issues found — your feed looks great!
+              </p>
+            </div>
+
+          ) : (
+            Object.keys(PRIORITY_CONFIG).map(priority => (
+              <PrioritySection
+                key={priority}
+                priority={priority}
+                issues={issues[priority] ?? []}
+                totalProducts={totalProducts}
+              />
+            ))
+          )}
       </div>
 
     </motion.div>
