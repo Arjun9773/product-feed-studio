@@ -280,8 +280,23 @@ router.post('/upload-photo', auth, upload.single('photo'), async (req, res) => {
 
     const photoPath = `/uploads/${req.file.filename}`;
 
+    // Super admin → save to switched store's user
+    // Store admin → save to own document
+    let userId = req.user.userId;
+
+    if (req.user.userType === 'super_admin') {
+      const tenantId = req.headers['x-tenant-id'];
+      if (tenantId) {
+        const storeUser = await User.findOne({
+          companyId: tenantId,
+          userType:  'store_admin',
+        });
+        if (storeUser) userId = storeUser.userId;
+      }
+    }
+
     await User.findOneAndUpdate(
-      { userId: req.user.userId },
+      { userId },
       { $set: { photoPath, updatedAt: new Date() } }
     );
 
@@ -294,15 +309,27 @@ router.post('/upload-photo', auth, upload.single('photo'), async (req, res) => {
 // DELETE /api/settings/remove-photo
 router.delete('/remove-photo', auth, async (req, res) => {
   try {
-    // Get old photo path to delete file
-    const user = await User.findOne({ userId: req.user.userId });
+    let userId = req.user.userId;
+
+    if (req.user.userType === 'super_admin') {
+      const tenantId = req.headers['x-tenant-id'];
+      if (tenantId) {
+        const storeUser = await User.findOne({
+          companyId: tenantId,
+          userType:  'store_admin',
+        });
+        if (storeUser) userId = storeUser.userId;
+      }
+    }
+
+    const user = await User.findOne({ userId });
     if (user?.photoPath) {
       const filePath = path.join(uploadDir, path.basename(user.photoPath));
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
 
     await User.findOneAndUpdate(
-      { userId: req.user.userId },
+      { userId },
       { $set: { photoPath: '', updatedAt: new Date() } }
     );
 

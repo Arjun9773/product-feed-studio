@@ -260,7 +260,7 @@ function MyAccountTab({ user }) {
 
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Upload your company logo
+              Upload your profile Image
             </p>
             <div className="flex gap-2">
               <Button

@@ -50,7 +50,7 @@ async function seedAdmin() {
   // Step 3: Insert into accesses collection
   await mainDb.collection('accesses').insertOne({
     companyId: companyId,
-    userId:    userId,
+    userId:    userId, 
     userType:  'super_admin',
     userName:  'Super Admin',
     status:    'active',
