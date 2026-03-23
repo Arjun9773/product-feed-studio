@@ -4,7 +4,30 @@ const axios    = require('axios');
 const mongoose = require('mongoose');
 const { getTenantDb } = require('../config/db');
 
+// ─── SCHEMAS ─────────────────────────────────────────────────
+const ProductSchema          = require('../models/Product');
+const FeedAuditProductSchema = require('../models/FeedAuditProduct');
+const AuditLogSchema         = require('../models/AuditLog');
+
 const activeCrons = new Map();
+
+// ============================================
+// GET TENANT MODELS (schema-aware, per tenant)
+// ============================================
+function getTenantModels(tenantId) {
+  const tenantDb = getTenantDb(tenantId);
+
+  const ProductModel = tenantDb.models?.Product
+    || tenantDb.model('Product', ProductSchema);
+
+  const FeedAuditProductModel = tenantDb.models?.FeedAuditProduct
+    || tenantDb.model('FeedAuditProduct', FeedAuditProductSchema);
+
+  const AuditLogModel = tenantDb.models?.AuditLog
+    || tenantDb.model('AuditLog', AuditLogSchema);
+
+  return { ProductModel, FeedAuditProductModel, AuditLogModel, tenantDb };
+}
 
 // ============================================
 // BUILD CRON EXPRESSION
@@ -22,7 +45,7 @@ function buildCronExpression(schedule, scheduleTime) {
 }
 
 // ============================================
-// TITLE KEYWORDS — for fallback detection
+// KEYWORD LISTS — for title extraction
 // ============================================
 const COLOR_KEYWORDS = [
   'red','blue','green','black','white','silver','gold',
@@ -61,13 +84,6 @@ const GENDER_KEYWORDS = [
 // HELPERS
 // ============================================
 
-// Check if any keyword exists in title
-function findInTitle(title, keywords) {
-  if (!title) return false;
-  const lower = title.toLowerCase();
-  return keywords.some(word => lower.includes(word));
-}
-
 // Check if value is empty
 function isEmpty(value) {
   return (
@@ -78,143 +94,272 @@ function isEmpty(value) {
   );
 }
 
+// Capitalize first letter
+function capitalize(word) {
+  if (!word) return null;
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+// Find keyword in title and return it
+function extractFromTitle(title, keywords) {
+  if (!title) return null;
+  const lower = title.toLowerCase();
+  const found = keywords.find(word => lower.includes(word));
+  return found ? capitalize(found) : null;
+}
+
+// ============================================
+// TITLE ENRICHMENT
+// — If field is empty, extract from title
+// — If found in title, save that value to DB
+// ============================================
+function enrichProductFromTitle(product) {
+  const title = product.product_name || '';
+
+  // Color
+  if (isEmpty(product.color)) {
+    const extracted = extractFromTitle(title, COLOR_KEYWORDS);
+    if (extracted) {
+      product.color = extracted;
+      console.log(`[ENRICH] color → "${extracted}" (from title)`);
+    }
+  }
+
+  // Gender
+  if (isEmpty(product.gender)) {
+    const extracted = extractFromTitle(title, GENDER_KEYWORDS);
+    if (extracted) {
+      product.gender = extracted;
+      console.log(`[ENRICH] gender → "${extracted}" (from title)`);
+    }
+  }
+
+  // Material
+  if (isEmpty(product.material)) {
+    const extracted = extractFromTitle(title, MATERIAL_KEYWORDS);
+    if (extracted) {
+      product.material = extracted;
+      console.log(`[ENRICH] material → "${extracted}" (from title)`);
+    }
+  }
+
+  // Pattern
+  if (isEmpty(product.pattern)) {
+    const extracted = extractFromTitle(title, PATTERN_KEYWORDS);
+    if (extracted) {
+      product.pattern = extracted;
+      console.log(`[ENRICH] pattern → "${extracted}" (from title)`);
+    }
+  }
+
+  // Age Group
+  if (isEmpty(product.age_group)) {
+    const extracted = extractFromTitle(title, AGE_GROUP_KEYWORDS);
+    if (extracted) {
+      product.age_group = extracted;
+      console.log(`[ENRICH] age_group → "${extracted}" (from title)`);
+    }
+  }
+
+  return product; // enriched product return பண்ணும்
+}
+
 // ============================================
 // AUDIT FUNCTION
+//
+// Priority: High    →  7 checks  (checks 1–7)
+// Priority: Medium  →  4 checks  (checks 8–11)
+// Priority: Low     →  1 check   (check  12)
+// Priority: Others  → 20 checks  (checks 13–32)
+// Total             → 32 checks
+//
+// NOTE: enrichProductFromTitle() already ran before
+// this — so if title had color, product.color is set.
+// Audit just checks if value exists after enrichment.
 // ============================================
 function auditProduct(product) {
   const issues = [];
   const title  = product.product_name || '';
 
-  // 1. Out of Stock
-  if (isEmpty(product.stock) || parseInt(product.stock) === 0) {
-    issues.push({
-      field:    'stock',
-      label:    'Out of Stock',
-      priority: 'high',
-      status:   'missing'
-    });
+  // ─── HIGH PRIORITY ───────────────────────────────────────
+
+  // 1. No Colour
+  if (isEmpty(product.color)) {
+    issues.push({ field: 'color', label: 'No Colour', priority: 'high', status: 'missing' });
   }
 
-  // 2. No Colour
-  // Check field → fallback to title
-  if (isEmpty(product.color) && !findInTitle(title, COLOR_KEYWORDS)) {
-    issues.push({
-      field:    'color',
-      label:    'No Colour',
-      priority: 'high',
-      status:   'missing'
-    });
+  // 2. No Age Group
+  if (isEmpty(product.age_group)) {
+    issues.push({ field: 'age_group', label: 'No Age Group', priority: 'high', status: 'missing' });
   }
 
-  // 3. No Age Group
-  // Check field → fallback to title
-  if (isEmpty(product.age_group) && !findInTitle(title, AGE_GROUP_KEYWORDS)) {
-    issues.push({
-      field:    'age_group',
-      label:    'No Age Group',
-      priority: 'high',
-      status:   'missing'
-    });
+  // 3. No Gender
+  if (isEmpty(product.gender)) {
+    issues.push({ field: 'gender', label: 'No Gender', priority: 'high', status: 'missing' });
   }
 
-  // 4. No Gender
-  // Check field → fallback to title
-  if (isEmpty(product.gender) && !findInTitle(title, GENDER_KEYWORDS)) {
-    issues.push({
-      field:    'gender',
-      label:    'No Gender',
-      priority: 'high',
-      status:   'missing'
-    });
+  // 4. No Material
+  if (isEmpty(product.material)) {
+    issues.push({ field: 'material', label: 'No Material', priority: 'high', status: 'missing' });
   }
 
-  // 5. No Material
-  // Check field → fallback to title
-  if (isEmpty(product.material) && !findInTitle(title, MATERIAL_KEYWORDS)) {
-    issues.push({
-      field:    'material',
-      label:    'No Material',
-      priority: 'high',
-      status:   'missing'
-    });
-  }
-
-  // 6. Brand not in title
+  // 5. Brand not in title
   if (
     !isEmpty(product.brand) &&
     !isEmpty(title) &&
     !title.toLowerCase().includes(product.brand.toLowerCase())
   ) {
-    issues.push({
-      field:    'product_name',
-      label:    'Brand not in title',
-      priority: 'high',
-      status:   'issue'
-    });
+    issues.push({ field: 'product_name', label: 'Brand not in title', priority: 'high', status: 'issue' });
   }
 
-  // 7. No GTIN
-  if (isEmpty(product.ean_id)) {
-    issues.push({
-      field:    'ean_id',
-      label:    'No GTIN',
-      priority: 'low',
-      status:   'missing'
-    });
+  // 6. No Google Category
+  if (isEmpty(product.google_category)) {
+    issues.push({ field: 'google_category', label: 'No Google Category', priority: 'high', status: 'missing' });
   }
+
+  // 7. No Brand
+  if (isEmpty(product.brand)) {
+    issues.push({ field: 'brand', label: 'No Brand', priority: 'high', status: 'missing' });
+  }
+
+  // ─── MEDIUM PRIORITY ─────────────────────────────────────
 
   // 8. No Pattern
-  // Check field → fallback to title
-  if (isEmpty(product.pattern) && !findInTitle(title, PATTERN_KEYWORDS)) {
-    issues.push({
-      field:    'pattern',
-      label:    'No Pattern',
-      priority: 'medium',
-      status:   'missing'
-    });
+  if (isEmpty(product.pattern)) {
+    issues.push({ field: 'pattern', label: 'No Pattern', priority: 'medium', status: 'missing' });
   }
 
   // 9. Proper Casing
-  // Fails if ALL CAPS or all lowercase
   if (!isEmpty(title)) {
     const isAllCaps  = title === title.toUpperCase();
     const isAllLower = title === title.toLowerCase();
     if (isAllCaps || isAllLower) {
-      issues.push({
-        field:    'product_name',
-        label:    'Proper casing',
-        priority: 'medium',
-        status:   'issue'
-      });
+      issues.push({ field: 'product_name', label: 'Proper casing', priority: 'medium', status: 'issue' });
     }
   }
 
-  // 10. Short product names
-  if (isEmpty(title) || title.trim().length < 20) {
-    issues.push({
-      field:    'product_name',
-      label:    'Short product names',
-      priority: 'medium',
-      status:   'issue'
-    });
+  // 10. No Description
+  if (isEmpty(product.description)) {
+    issues.push({ field: 'description', label: 'No Description', priority: 'medium', status: 'missing' });
   }
 
-  // 11. No Brand
-  // Check field → fallback to title
-  if (isEmpty(product.brand)) {
-    issues.push({
-      field:    'brand',
-      label:    'No Brand',
-      priority: 'high',
-      status:   'missing'
-    });
+  // 11. No Short Description
+  if (isEmpty(product.short_description)) {
+    issues.push({ field: 'short_description', label: 'No Short Description', priority: 'medium', status: 'missing' });
   }
 
-  // Score calculation
-  const totalChecks = 11;
-  const score       = Math.round(
-    ((totalChecks - issues.length) / totalChecks) * 100
-  );
+  // ─── LOW PRIORITY ────────────────────────────────────────
+
+  // 12. No GTIN
+  if (isEmpty(product.ean_id)) {
+    issues.push({ field: 'ean_id', label: 'No GTIN', priority: 'low', status: 'missing' });
+  }
+
+  // ─── OTHERS PRIORITY ─────────────────────────────────────
+
+  // 13. No URL Key
+  if (isEmpty(product.url_key)) {
+    issues.push({ field: 'url_key', label: 'No Url Key', priority: 'others', status: 'missing' });
+  }
+
+  // 14. No Meta Title
+  if (isEmpty(product.meta_title)) {
+    issues.push({ field: 'meta_title', label: 'No Meta Tittle', priority: 'others', status: 'missing' });
+  }
+
+  // 15. No BL Size
+  if (isEmpty(product.bl_size)) {
+    issues.push({ field: 'bl_size', label: 'No Bl Size', priority: 'others', status: 'missing' });
+  }
+
+  // 16. No Quantity
+  if (isEmpty(product.quantity)) {
+    issues.push({ field: 'quantity', label: 'No Quantity', priority: 'others', status: 'missing' });
+  }
+
+  // 17. No Was Price
+  if (isEmpty(product.was_price)) {
+    issues.push({ field: 'was_price', label: 'No Was Price', priority: 'others', status: 'missing' });
+  }
+
+  // 18. No Sku Variation
+  if (isEmpty(product.sku_variation)) {
+    issues.push({ field: 'sku_variation', label: 'No Sku Variation', priority: 'others', status: 'missing' });
+  }
+
+  // 19. No BL UPC
+  if (isEmpty(product.bl_upc)) {
+    issues.push({ field: 'bl_upc', label: 'No Bl Upc', priority: 'others', status: 'missing' });
+  }
+
+  // 20. No Product Highlight 1
+  if (isEmpty(product.product_highlight1)) {
+    issues.push({ field: 'product_highlight1', label: 'No Product Highlight1', priority: 'others', status: 'missing' });
+  }
+
+  // 21. No Product Highlight 2
+  if (isEmpty(product.product_highlight2)) {
+    issues.push({ field: 'product_highlight2', label: 'No Product Highlight2', priority: 'others', status: 'missing' });
+  }
+
+  // 22. No Product Highlight 3
+  if (isEmpty(product.product_highlight3)) {
+    issues.push({ field: 'product_highlight3', label: 'No Product Highlight3', priority: 'others', status: 'missing' });
+  }
+
+  // 23. No Product Highlight 4
+  if (isEmpty(product.product_highlight4)) {
+    issues.push({ field: 'product_highlight4', label: 'No Product Highlight4', priority: 'others', status: 'missing' });
+  }
+
+  // 24. No Product Highlight 5
+  if (isEmpty(product.product_highlight5)) {
+    issues.push({ field: 'product_highlight5', label: 'No Product Highlight5', priority: 'others', status: 'missing' });
+  }
+
+  // 25. No Additional Image 1
+  if (isEmpty(product.additional_image1)) {
+    issues.push({ field: 'additional_image1', label: 'No Additional Image1', priority: 'others', status: 'missing' });
+  }
+
+  // 26. No Additional Image 2
+  if (isEmpty(product.additional_image2)) {
+    issues.push({ field: 'additional_image2', label: 'No Additional Image2', priority: 'others', status: 'missing' });
+  }
+
+  // 27. No Additional Image 3
+  if (isEmpty(product.additional_image3)) {
+    issues.push({ field: 'additional_image3', label: 'No Additional Image3', priority: 'others', status: 'missing' });
+  }
+
+  // 28. No Additional Image 4
+  if (isEmpty(product.additional_image4)) {
+    issues.push({ field: 'additional_image4', label: 'No Additional Image4', priority: 'others', status: 'missing' });
+  }
+
+  // 29. No Additional Image 5
+  if (isEmpty(product.additional_image5)) {
+    issues.push({ field: 'additional_image5', label: 'No Additional Image5', priority: 'others', status: 'missing' });
+  }
+
+  // 30. No Additional Image 6
+  if (isEmpty(product.additional_image6)) {
+    issues.push({ field: 'additional_image6', label: 'No Additional Image6', priority: 'others', status: 'missing' });
+  }
+
+  // 31. No Additional Image 7
+  if (isEmpty(product.additional_image7)) {
+    issues.push({ field: 'additional_image7', label: 'No Additional Image7', priority: 'others', status: 'missing' });
+  }
+
+  // 32. No Additional Image 8
+  if (isEmpty(product.additional_image8)) {
+    issues.push({ field: 'additional_image8', label: 'No Additional Image8', priority: 'others', status: 'missing' });
+  }
+
+  // ─── SCORE (out of 32 checks) ─────────────────────────────
+  const totalChecks = 32;
+  const score = Math.round(((totalChecks - issues.length) / totalChecks) * 100);
 
   return {
     issues,
@@ -223,17 +368,16 @@ function auditProduct(product) {
       high:   issues.filter(i => i.priority === 'high').length,
       medium: issues.filter(i => i.priority === 'medium').length,
       low:    issues.filter(i => i.priority === 'low').length,
-    }
+      others: issues.filter(i => i.priority === 'others').length,
+    },
   };
 }
 
 // ============================================
 // SAVE AUDIT TO feed_audit_products
 // ============================================
-async function saveAuditResult(tenantDb, product, auditResult) {
-  const auditCollection = tenantDb.collection('feed_audit_products');
-
-  await auditCollection.updateOne(
+async function saveAuditResult(FeedAuditProductModel, product, auditResult) {
+  await FeedAuditProductModel.updateOne(
     { sourceId: String(product.item_code || product.ean_id) },
     {
       $set: {
@@ -246,7 +390,7 @@ async function saveAuditResult(tenantDb, product, auditResult) {
         summary:      auditResult.summary,
         updatedAt:    new Date(),
       },
-      $setOnInsert: { createdAt: new Date() }
+      $setOnInsert: { createdAt: new Date() },
     },
     { upsert: true }
   );
@@ -278,95 +422,123 @@ async function importFeedForTenant(tenantId, feed) {
 
     console.log(`[CRON] ✔ Fetched ${products.length} products for tenant: ${tenantId}`);
 
-    // Step 3: Get tenant DB + collections
-    const tenantDb    = getTenantDb(tenantId);
-    const productsCol = tenantDb.collection('products');
-    const auditLogCol = tenantDb.collection('audit');
+    // Step 3: Get schema-aware tenant models
+    const { ProductModel, FeedAuditProductModel, AuditLogModel } = getTenantModels(tenantId);
 
     // Step 4: Mark ALL existing products inactive before import
-    await productsCol.updateMany(
-      { tenantId: tenantId },
+    await ProductModel.updateMany(
+      { tenantId },
       {
         $set: {
           is_active:     false,
           deactivatedAt: new Date(),
-        }
+        },
       }
     );
     console.log(`[CRON] ✔ Marked all products inactive for tenant: ${tenantId}`);
 
-    let newCount        = 0;
-    let updatedCount    = 0;
-    let unchangedCount  = 0;
-    let auditSummary    = { high: 0, medium: 0, low: 0 };
+    let newCount       = 0;
+    let updatedCount   = 0;
+    let unchangedCount = 0;
+    let enrichedCount  = 0;
+    let auditSummary   = { high: 0, medium: 0, low: 0, others: 0 };
 
-    // Step 5: Upsert each product
-    for (const product of products) {
-      const uniqueId = product.item_code || product.ean_id || product.id;
+    // Step 5: Process each product
+    for (const rawProduct of products) {
+      const uniqueId = rawProduct.item_code || rawProduct.ean_id || rawProduct.id;
       if (!uniqueId) continue;
 
-      const result = await productsCol.updateOne(
+      // ─── STEP 5a: Enrich from title ──────────────────────
+      // If color/gender/material/pattern/age_group is empty,
+      // extract from product title and save actual value to DB
+      const before  = JSON.stringify({
+        color:     rawProduct.color,
+        gender:    rawProduct.gender,
+        material:  rawProduct.material,
+        pattern:   rawProduct.pattern,
+        age_group: rawProduct.age_group,
+      });
+
+      const product = enrichProductFromTitle(rawProduct);
+
+      const after = JSON.stringify({
+        color:     product.color,
+        gender:    product.gender,
+        material:  product.material,
+        pattern:   product.pattern,
+        age_group: product.age_group,
+      });
+
+      if (before !== after) enrichedCount++;
+      // ─────────────────────────────────────────────────────
+
+      // ─── STEP 5b: Upsert enriched product to DB ──────────
+      const result = await ProductModel.updateOne(
         { sourceId: String(uniqueId) },
         {
           $set: {
-            ...product,
+            ...product,        // ← enriched product (color filled from title)
             sourceId:      String(uniqueId),
             feedId:        String(feed._id),
             tenantId:      tenantId,
-            is_active:     true,   // ← restore active
-            deactivatedAt: null,   // ← clear deactivation
+            is_active:     true,
+            deactivatedAt: null,
             updatedAt:     new Date(),
           },
           $setOnInsert: {
             importedAt: new Date(),
-          }
+          },
         },
         { upsert: true }
       );
 
-      // MongoDB result tells us exactly what happened
       if (result.upsertedCount > 0) {
-        newCount++;                // 🆕 brand new product
+        newCount++;
       } else if (result.modifiedCount > 0) {
-        updatedCount++;            // ✏️ existing product updated
+        updatedCount++;
       } else {
-        unchangedCount++;          // ✅ no change
+        unchangedCount++;
       }
 
-      // Step 6: Audit product fields
+      // ─── STEP 5c: Audit enriched product ─────────────────
+      // Audit runs AFTER enrichment — so if title had color,
+      // product.color is now set → No Colour issue won't appear
       const auditResult = auditProduct(product);
-      await saveAuditResult(tenantDb, product, auditResult);
+      await saveAuditResult(FeedAuditProductModel, product, auditResult);
 
       auditSummary.high   += auditResult.summary.high;
       auditSummary.medium += auditResult.summary.medium;
       auditSummary.low    += auditResult.summary.low;
+      auditSummary.others += auditResult.summary.others;
     }
 
-    // Step 7: Count inactive products (removed from feed)
-    const inactiveCount = await productsCol.countDocuments({
-      tenantId:  tenantId,
+    // Step 6: Count inactive products (removed from feed)
+    const inactiveCount = await ProductModel.countDocuments({
+      tenantId,
       is_active: false,
     });
 
     console.log(`[CRON] ✔ Import done:`);
-    console.log(`        🆕 New:       ${newCount}`);
-    console.log(`        ✏️  Updated:   ${updatedCount}`);
-    console.log(`        ✅ Unchanged:  ${unchangedCount}`);
-    console.log(`        💤 Inactive:  ${inactiveCount}`);
-    console.log(`[CRON] ✔ Audit — High: ${auditSummary.high}, Medium: ${auditSummary.medium}, Low: ${auditSummary.low}`);
+    console.log(`        🆕 New:        ${newCount}`);
+    console.log(`        ✏️  Updated:    ${updatedCount}`);
+    console.log(`        ✅ Unchanged:   ${unchangedCount}`);
+    console.log(`        💤 Inactive:   ${inactiveCount}`);
+    console.log(`        🔍 Enriched:   ${enrichedCount} (title-லிருந்து values filled)`);
+    console.log(`[CRON] ✔ Audit — High: ${auditSummary.high}, Medium: ${auditSummary.medium}, Low: ${auditSummary.low}, Others: ${auditSummary.others}`);
 
-    // Step 8: Save import log
-    await auditLogCol.insertOne({
-      action:           'feed_import',
-      feedId:           String(feed._id),
-      feedName:         feed.feedName,
-      totalProducts:    products.length,
-      newProducts:      newCount,
-      updatedProducts:  updatedCount,
+    // Step 7: Save import log
+    await AuditLogModel.create({
+      action:            'feed_import',
+      feedId:            String(feed._id),
+      feedName:          feed.feedName,
+      totalProducts:     products.length,
+      newProducts:       newCount,
+      updatedProducts:   updatedCount,
       unchangedProducts: unchangedCount,
-      inactiveProducts: inactiveCount,
-      auditSummary:     auditSummary,
-      importedAt:       new Date(),
+      inactiveProducts:  inactiveCount,
+      enrichedProducts:  enrichedCount,
+      auditSummary:      auditSummary,
+      importedAt:        new Date(),
     });
 
   } catch (error) {
@@ -408,7 +580,6 @@ async function initAllCrons() {
   try {
     console.log('[CRON] 🚀 Initializing all cron jobs...');
 
-    // Read from merchants collection in main DB
     const mainDb    = mongoose.connection.useDb('gmc_main_admin_db');
     const merchants = await mainDb.collection('merchants')
       .find({ status: 'active' })
@@ -467,5 +638,5 @@ module.exports = {
   initAllCrons,
   registerFeedCron,
   getCronStatus,
-  importFeedForTenant
+  importFeedForTenant,
 };
