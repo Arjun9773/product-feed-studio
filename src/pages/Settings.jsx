@@ -585,7 +585,7 @@ function ManageUsersTab({ user }) {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [removing, setRemoving] = useState(null);
-
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -602,7 +602,13 @@ function ManageUsersTab({ user }) {
     fetchUsers();
   }, []);
 
-  const handleRemove = async (userId) => {
+  const handleRemove = (userId) => {
+    setConfirmDelete(userId); // Show confirm dialog
+  };
+
+  const confirmRemove = async () => {
+    const userId = confirmDelete;
+    setConfirmDelete(null);
     setRemoving(userId);
     try {
       await API.delete(`/settings/users/${userId}`);
@@ -614,7 +620,6 @@ function ManageUsersTab({ user }) {
       setRemoving(null);
     }
   };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -716,6 +721,43 @@ function ManageUsersTab({ user }) {
                     )}
                   </Button>
                 </div>
+                {/* Confirm Delete Dialog */}
+                {confirmDelete && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                      className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+                      onClick={() => setConfirmDelete(null)}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10"
+                    >
+                      <h2 className="text-lg font-semibold text-foreground mb-2">
+                        Remove User
+                      </h2>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Are you sure you want to remove this user? This action
+                        cannot be undone.
+                      </p>
+                      <div className="flex gap-3">
+                        <Button
+                          onClick={confirmRemove}
+                          className="flex-1 bg-destructive hover:bg-destructive/90 text-white gap-2"
+                        >
+                          <Trash2 className="h-4 w-4" /> Remove
+                        </Button>
+                        <Button
+                          onClick={() => setConfirmDelete(null)}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

@@ -48,6 +48,7 @@ export function AppHeader({ onMenuToggle }) {
   const handleStoreSelect = (store) => {
     switchStore(store.companyId, store.companyName);
     setDropdownOpen(false);
+    window.location.reload();
   };
 
   // Initials from DB profile

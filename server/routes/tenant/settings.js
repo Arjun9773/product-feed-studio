@@ -195,18 +195,26 @@ router.delete('/users/:userId', auth, async (req, res) => {
     if (!['super_admin', 'store_admin'].includes(req.user.userType)) {
       return res.status(403).json({ message: 'Access denied' });
     }
-                                                                   
+
     const { userId } = req.params;
 
     if (userId === req.user.userId) {
       return res.status(400).json({ message: 'Cannot remove yourself' });
     }
 
-    const user = await User.findOne({ userId, companyId: req.user.companyId });
+    // Super admin → use switched store companyId
+    // Store admin → use own companyId
+    const companyId = req.user.userType === 'super_admin'
+      ? req.headers['x-tenant-id']
+      : req.user.companyId;
+
+    if (!companyId) return res.status(400).json({ message: 'No store selected' });
+
+    const user = await User.findOne({ userId, companyId });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     await User.deleteOne({ userId });
-    await Access.deleteOne({ userId, companyId: req.user.companyId });
+    await Access.deleteOne({ userId, companyId });
 
     res.json({ message: 'User removed successfully' });
   } catch (error) {

@@ -20,7 +20,7 @@ const ProductSchema = new mongoose.Schema(
     stock:           { type: Number, default: null },
     quantity:        { type: Number, default: null },
 
-    // ─── DESCRIPTIONS ────────────────────────────────────────
+    // ─── DESCRIPTIONS  
     description:       { type: String, default: null },
     short_description: { type: String, default: null },
 
@@ -60,6 +60,7 @@ const ProductSchema = new mongoose.Schema(
     deactivatedAt: { type: Date,    default: null },
     importedAt:    { type: Date,    default: null },
     updatedAt:     { type: Date,    default: null },
+    title_optimization_status: { type: String, enum: ['pending', 'optimized', 'failed'], default: 'pending' },
   },
   {
     timestamps: false,
