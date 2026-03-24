@@ -2,14 +2,45 @@
 const cron     = require('node-cron');
 const axios    = require('axios');
 const mongoose = require('mongoose');
-const { getMainDb, getTenantDb } = require('../config/db');
+const { getTenantDb } = require('../config/db');
 
 // ─── SCHEMAS ─────────────────────────────────────────────────
 const ProductSchema          = require('../models/Product');
 const FeedAuditProductSchema = require('../models/FeedAuditProduct');
 const AuditLogSchema         = require('../models/AuditLog');
+const FeedAuditIssueSchema   = require('../models/FeedAuditIssue');
 
 const activeCrons = new Map();
+
+// ============================================
+// AUDIT ISSUE CACHE
+// — Server start-ல ஒருமுறை DB-லிருந்து load,
+//   அதுக்கு பிறகு memory-லிருந்து reuse.
+//   Admin panel-ல issue update பண்ணா
+//   clearAuditIssueCache() call பண்ணு.
+// ============================================
+let cachedAuditIssues = null;
+
+async function getAuditIssues() {
+  if (cachedAuditIssues) return cachedAuditIssues;
+
+  // உன் project-ல் getMainDb இல்லை —
+  // main DB என்பது mongoose.connection தான்
+  const FeedAuditIssueModel =
+    mongoose.models?.FeedAuditIssue ||
+    mongoose.model('FeedAuditIssue', FeedAuditIssueSchema);
+
+  const issues = await FeedAuditIssueModel.find({ isActive: true }).lean();
+  cachedAuditIssues = issues;
+
+  console.log(`[AUDIT] ✔ Loaded ${issues.length} audit issue definitions from DB`);
+  return cachedAuditIssues;
+}
+
+function clearAuditIssueCache() {
+  cachedAuditIssues = null;
+  console.log('[AUDIT] 🔄 Issue cache cleared — will reload on next cron run');
+}
 
 // ============================================
 // GET TENANT MODELS (schema-aware, per tenant)
@@ -17,14 +48,17 @@ const activeCrons = new Map();
 function getTenantModels(tenantId) {
   const tenantDb = getTenantDb(tenantId);
 
-  const ProductModel = tenantDb.models?.Product
-    || tenantDb.model('Product', ProductSchema);
+  const ProductModel =
+    tenantDb.models?.Product ||
+    tenantDb.model('Product', ProductSchema);
 
-  const FeedAuditProductModel = tenantDb.models?.FeedAuditProduct
-    || tenantDb.model('FeedAuditProduct', FeedAuditProductSchema);
+  const FeedAuditProductModel =
+    tenantDb.models?.FeedAuditProduct ||
+    tenantDb.model('FeedAuditProduct', FeedAuditProductSchema);
 
-  const AuditLogModel = tenantDb.models?.AuditLog
-    || tenantDb.model('AuditLog', AuditLogSchema);
+  const AuditLogModel =
+    tenantDb.models?.AuditLog ||
+    tenantDb.model('AuditLog', AuditLogSchema);
 
   return { ProductModel, FeedAuditProductModel, AuditLogModel, tenantDb };
 }
@@ -84,7 +118,6 @@ const GENDER_KEYWORDS = [
 // HELPERS
 // ============================================
 
-// Check if value is empty
 function isEmpty(value) {
   return (
     value === null      ||
@@ -94,13 +127,11 @@ function isEmpty(value) {
   );
 }
 
-// Capitalize first letter
 function capitalize(word) {
   if (!word) return null;
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-// Find keyword in title and return it
 function extractFromTitle(title, keywords) {
   if (!title) return null;
   const lower = title.toLowerCase();
@@ -116,7 +147,6 @@ function extractFromTitle(title, keywords) {
 function enrichProductFromTitle(product) {
   const title = product.product_name || '';
 
-  // Color
   if (isEmpty(product.color)) {
     const extracted = extractFromTitle(title, COLOR_KEYWORDS);
     if (extracted) {
@@ -125,7 +155,6 @@ function enrichProductFromTitle(product) {
     }
   }
 
-  // Gender
   if (isEmpty(product.gender)) {
     const extracted = extractFromTitle(title, GENDER_KEYWORDS);
     if (extracted) {
@@ -134,7 +163,6 @@ function enrichProductFromTitle(product) {
     }
   }
 
-  // Material
   if (isEmpty(product.material)) {
     const extracted = extractFromTitle(title, MATERIAL_KEYWORDS);
     if (extracted) {
@@ -143,7 +171,6 @@ function enrichProductFromTitle(product) {
     }
   }
 
-  // Pattern
   if (isEmpty(product.pattern)) {
     const extracted = extractFromTitle(title, PATTERN_KEYWORDS);
     if (extracted) {
@@ -152,7 +179,6 @@ function enrichProductFromTitle(product) {
     }
   }
 
-  // Age Group
   if (isEmpty(product.age_group)) {
     const extracted = extractFromTitle(title, AGE_GROUP_KEYWORDS);
     if (extracted) {
@@ -161,204 +187,58 @@ function enrichProductFromTitle(product) {
     }
   }
 
-  return product; // enriched product return பண்ணும்
+  return product;
 }
 
 // ============================================
-// AUDIT FUNCTION
+// AUDIT FUNCTION (DB-driven — no hardcode)
 //
-// Priority: High    →  7 checks  (checks 1–7)
-// Priority: Medium  →  4 checks  (checks 8–11)
-// Priority: Low     →  1 check   (check  12)
-// Priority: Others  → 20 checks  (checks 13–32)
-// Total             → 32 checks
+// auditIssues → getAuditIssues() return value
+// (already fetched once per cron run — cached)
 //
-// NOTE: enrichProductFromTitle() already ran before
-// this — so if title had color, product.color is set.
-// Audit just checks if value exists after enrichment.
+// Special fields:
+//   brand_in_title → brand title-ல் இருக்கா check
+//   proper_casing  → title ALL CAPS / all lower check
+//   மத்தது எல்லாம் → isEmpty(product[field]) generic check
 // ============================================
-function auditProduct(product) {
+function auditProduct(product, auditIssues) {
   const issues = [];
   const title  = product.product_name || '';
 
-  // ─── HIGH PRIORITY ───────────────────────────────────────
+  for (const issueDef of auditIssues) {
+    const { field, label, priority, status } = issueDef;
 
-  // 1. No Colour
-  if (isEmpty(product.color)) {
-    issues.push({ field: 'color', label: 'No Colour', priority: 'high', status: 'missing' });
-  }
+    // ── Special: brand not in title ──────────────────────
+    if (field === 'brand_in_title') {
+      if (
+        !isEmpty(product.brand) &&
+        !isEmpty(title) &&
+        !title.toLowerCase().includes(product.brand.toLowerCase())
+      ) {
+        issues.push({ field, label, priority, status });
+      }
+      continue;
+    }
 
-  // 2. No Age Group
-  if (isEmpty(product.age_group)) {
-    issues.push({ field: 'age_group', label: 'No Age Group', priority: 'high', status: 'missing' });
-  }
+    // ── Special: proper casing ────────────────────────────
+    if (field === 'proper_casing') {
+      if (!isEmpty(title)) {
+        const isAllCaps  = title === title.toUpperCase();
+        const isAllLower = title === title.toLowerCase();
+        if (isAllCaps || isAllLower) {
+          issues.push({ field, label, priority, status });
+        }
+      }
+      continue;
+    }
 
-  // 3. No Gender
-  if (isEmpty(product.gender)) {
-    issues.push({ field: 'gender', label: 'No Gender', priority: 'high', status: 'missing' });
-  }
-
-  // 4. No Material
-  if (isEmpty(product.material)) {
-    issues.push({ field: 'material', label: 'No Material', priority: 'high', status: 'missing' });
-  }
-
-  // 5. Brand not in title
-  if (
-    !isEmpty(product.brand) &&
-    !isEmpty(title) &&
-    !title.toLowerCase().includes(product.brand.toLowerCase())
-  ) {
-    issues.push({ field: 'product_name', label: 'Brand not in title', priority: 'high', status: 'issue' });
-  }
-
-  // 6. No Google Category
-  if (isEmpty(product.google_category)) {
-    issues.push({ field: 'google_category', label: 'No Google Category', priority: 'high', status: 'missing' });
-  }
-
-  // 7. No Brand
-  if (isEmpty(product.brand)) {
-    issues.push({ field: 'brand', label: 'No Brand', priority: 'high', status: 'missing' });
-  }
-
-  // ─── MEDIUM PRIORITY ─────────────────────────────────────
-
-  // 8. No Pattern
-  if (isEmpty(product.pattern)) {
-    issues.push({ field: 'pattern', label: 'No Pattern', priority: 'medium', status: 'missing' });
-  }
-
-  // 9. Proper Casing
-  if (!isEmpty(title)) {
-    const isAllCaps  = title === title.toUpperCase();
-    const isAllLower = title === title.toLowerCase();
-    if (isAllCaps || isAllLower) {
-      issues.push({ field: 'product_name', label: 'Proper casing', priority: 'medium', status: 'issue' });
+    // ── Generic: missing field check ──────────────────────
+    if (isEmpty(product[field])) {
+      issues.push({ field, label, priority, status });
     }
   }
 
-  // 10. No Description
-  if (isEmpty(product.description)) {
-    issues.push({ field: 'description', label: 'No Description', priority: 'medium', status: 'missing' });
-  }
-
-  // 11. No Short Description
-  if (isEmpty(product.short_description)) {
-    issues.push({ field: 'short_description', label: 'No Short Description', priority: 'medium', status: 'missing' });
-  }
-
-  // ─── LOW PRIORITY ────────────────────────────────────────
-
-  // 12. No GTIN
-  if (isEmpty(product.ean_id)) {
-    issues.push({ field: 'ean_id', label: 'No GTIN', priority: 'low', status: 'missing' });
-  }
-
-  // ─── OTHERS PRIORITY ─────────────────────────────────────
-
-  // 13. No URL Key
-  if (isEmpty(product.url_key)) {
-    issues.push({ field: 'url_key', label: 'No Url Key', priority: 'others', status: 'missing' });
-  }
-
-  // 14. No Meta Title
-  if (isEmpty(product.meta_title)) {
-    issues.push({ field: 'meta_title', label: 'No Meta Tittle', priority: 'others', status: 'missing' });
-  }
-
-  // 15. No BL Size
-  if (isEmpty(product.bl_size)) {
-    issues.push({ field: 'bl_size', label: 'No Bl Size', priority: 'others', status: 'missing' });
-  }
-
-  // 16. No Quantity
-  if (isEmpty(product.quantity)) {
-    issues.push({ field: 'quantity', label: 'No Quantity', priority: 'others', status: 'missing' });
-  }
-
-  // 17. No Was Price
-  if (isEmpty(product.was_price)) {
-    issues.push({ field: 'was_price', label: 'No Was Price', priority: 'others', status: 'missing' });
-  }
-
-  // 18. No Sku Variation
-  if (isEmpty(product.sku_variation)) {
-    issues.push({ field: 'sku_variation', label: 'No Sku Variation', priority: 'others', status: 'missing' });
-  }
-
-  // 19. No BL UPC
-  if (isEmpty(product.bl_upc)) {
-    issues.push({ field: 'bl_upc', label: 'No Bl Upc', priority: 'others', status: 'missing' });
-  }
-
-  // 20. No Product Highlight 1
-  if (isEmpty(product.product_highlight1)) {
-    issues.push({ field: 'product_highlight1', label: 'No Product Highlight1', priority: 'others', status: 'missing' });
-  }
-
-  // 21. No Product Highlight 2
-  if (isEmpty(product.product_highlight2)) {
-    issues.push({ field: 'product_highlight2', label: 'No Product Highlight2', priority: 'others', status: 'missing' });
-  }
-
-  // 22. No Product Highlight 3
-  if (isEmpty(product.product_highlight3)) {
-    issues.push({ field: 'product_highlight3', label: 'No Product Highlight3', priority: 'others', status: 'missing' });
-  }
-
-  // 23. No Product Highlight 4
-  if (isEmpty(product.product_highlight4)) {
-    issues.push({ field: 'product_highlight4', label: 'No Product Highlight4', priority: 'others', status: 'missing' });
-  }
-
-  // 24. No Product Highlight 5
-  if (isEmpty(product.product_highlight5)) {
-    issues.push({ field: 'product_highlight5', label: 'No Product Highlight5', priority: 'others', status: 'missing' });
-  }
-
-  // 25. No Additional Image 1
-  if (isEmpty(product.additional_image1)) {
-    issues.push({ field: 'additional_image1', label: 'No Additional Image1', priority: 'others', status: 'missing' });
-  }
-
-  // 26. No Additional Image 2
-  if (isEmpty(product.additional_image2)) {
-    issues.push({ field: 'additional_image2', label: 'No Additional Image2', priority: 'others', status: 'missing' });
-  }
-
-  // 27. No Additional Image 3
-  if (isEmpty(product.additional_image3)) {
-    issues.push({ field: 'additional_image3', label: 'No Additional Image3', priority: 'others', status: 'missing' });
-  }
-
-  // 28. No Additional Image 4
-  if (isEmpty(product.additional_image4)) {
-    issues.push({ field: 'additional_image4', label: 'No Additional Image4', priority: 'others', status: 'missing' });
-  }
-
-  // 29. No Additional Image 5
-  if (isEmpty(product.additional_image5)) {
-    issues.push({ field: 'additional_image5', label: 'No Additional Image5', priority: 'others', status: 'missing' });
-  }
-
-  // 30. No Additional Image 6
-  if (isEmpty(product.additional_image6)) {
-    issues.push({ field: 'additional_image6', label: 'No Additional Image6', priority: 'others', status: 'missing' });
-  }
-
-  // 31. No Additional Image 7
-  if (isEmpty(product.additional_image7)) {
-    issues.push({ field: 'additional_image7', label: 'No Additional Image7', priority: 'others', status: 'missing' });
-  }
-
-  // 32. No Additional Image 8
-  if (isEmpty(product.additional_image8)) {
-    issues.push({ field: 'additional_image8', label: 'No Additional Image8', priority: 'others', status: 'missing' });
-  }
-
-  // ─── SCORE (out of 32 checks) ─────────────────────────────
-  const totalChecks = 32;
+  const totalChecks = auditIssues.length;
   const score = Math.round(((totalChecks - issues.length) / totalChecks) * 100);
 
   return {
@@ -425,7 +305,12 @@ async function importFeedForTenant(tenantId, feed) {
     // Step 3: Get schema-aware tenant models
     const { ProductModel, FeedAuditProductModel, AuditLogModel } = getTenantModels(tenantId);
 
-    // Step 4: Mark ALL existing products inactive before import
+    // Step 4: Load audit issues ONCE per cron run (cached after first load)
+    // 10,000 products இருந்தாலும் DB-க்கு ஒரே ஒரு query போகும்
+    const auditIssues = await getAuditIssues();
+    console.log(`[CRON] ✔ Using ${auditIssues.length} audit issue definitions`);
+
+    // Step 5: Mark ALL existing products inactive before import
     await ProductModel.updateMany(
       { tenantId },
       {
@@ -443,15 +328,13 @@ async function importFeedForTenant(tenantId, feed) {
     let enrichedCount  = 0;
     let auditSummary   = { high: 0, medium: 0, low: 0, others: 0 };
 
-    // Step 5: Process each product
+    // Step 6: Process each product
     for (const rawProduct of products) {
       const uniqueId = rawProduct.item_code || rawProduct.ean_id || rawProduct.id;
       if (!uniqueId) continue;
 
-      // ─── STEP 5a: Enrich from title ──────────────────────
-      // If color/gender/material/pattern/age_group is empty,
-      // extract from product title and save actual value to DB
-      const before  = JSON.stringify({
+      // ─── STEP 6a: Enrich from title ──────────────────────
+      const before = JSON.stringify({
         color:     rawProduct.color,
         gender:    rawProduct.gender,
         material:  rawProduct.material,
@@ -470,14 +353,13 @@ async function importFeedForTenant(tenantId, feed) {
       });
 
       if (before !== after) enrichedCount++;
-      // ─────────────────────────────────────────────────────
 
-      // ─── STEP 5b: Upsert enriched product to DB ──────────
+      // ─── STEP 6b: Upsert enriched product to DB ──────────
       const result = await ProductModel.updateOne(
         { sourceId: String(uniqueId) },
         {
           $set: {
-            ...product,        // ← enriched product (color filled from title)
+            ...product,
             sourceId:      String(uniqueId),
             feedId:        String(feed._id),
             tenantId:      tenantId,
@@ -500,10 +382,11 @@ async function importFeedForTenant(tenantId, feed) {
         unchangedCount++;
       }
 
-      // ─── STEP 5c: Audit enriched product ─────────────────
+      // ─── STEP 6c: Audit enriched product ─────────────────
       // Audit runs AFTER enrichment — so if title had color,
-      // product.color is now set → No Colour issue won't appear
-      const auditResult = auditProduct(product);
+      // product.color is now set → No Colour issue won't appear.
+      // auditIssues already loaded above — no extra DB hit here.
+      const auditResult = auditProduct(product, auditIssues);
       await saveAuditResult(FeedAuditProductModel, product, auditResult);
 
       auditSummary.high   += auditResult.summary.high;
@@ -512,7 +395,7 @@ async function importFeedForTenant(tenantId, feed) {
       auditSummary.others += auditResult.summary.others;
     }
 
-    // Step 6: Count inactive products (removed from feed)
+    // Step 7: Count inactive products (removed from feed)
     const inactiveCount = await ProductModel.countDocuments({
       tenantId,
       is_active: false,
@@ -526,7 +409,7 @@ async function importFeedForTenant(tenantId, feed) {
     console.log(`        🔍 Enriched:   ${enrichedCount} (title-லிருந்து values filled)`);
     console.log(`[CRON] ✔ Audit — High: ${auditSummary.high}, Medium: ${auditSummary.medium}, Low: ${auditSummary.low}, Others: ${auditSummary.others}`);
 
-    // Step 7: Save import log
+    // Step 8: Save import log
     await AuditLogModel.create({
       action:            'feed_import',
       feedId:            String(feed._id),
@@ -580,8 +463,8 @@ async function initAllCrons() {
   try {
     console.log('[CRON] 🚀 Initializing all cron jobs...');
 
-    const mainDb    = getMainDb();
-    const merchants = await mainDb.collection('merchants')
+    const merchants = await mongoose.connection
+      .collection('merchants')
       .find({ status: 'active' })
       .toArray();
 
@@ -639,4 +522,5 @@ module.exports = {
   registerFeedCron,
   getCronStatus,
   importFeedForTenant,
+  clearAuditIssueCache, // ← Admin panel-ல் issue update பண்ணா இதை call பண்ணு
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ImageOff, Sparkles, Check, X, XCircle, Loader2,
@@ -13,20 +13,48 @@ import { useAuth } from "@/context/AuthContext";
 import API from "@/hooks/useApi";
 import { toast } from "sonner";
 
-// Field name → DB field key mapping
-const FIELD_MAP = {
-  "Product Color": "color",
-  "Age Group":     "age_group",
-  "Gender":        "gender",
-  "Material":      "material",
-  "Pattern":       "pattern",
-  "GTIN":          "ean_id",
-};
+// ============================================================
+// ALL POSSIBLE FIELDS
+// ============================================================
+const ALL_FIELDS = [
+  { label: "Color",               field: "color",               group: "Core Attributes" },
+  { label: "Gender",              field: "gender",              group: "Core Attributes" },
+  { label: "Age Group",           field: "age_group",           group: "Core Attributes" },
+  { label: "Material",            field: "material",            group: "Core Attributes" },
+  { label: "Pattern",             field: "pattern",             group: "Core Attributes" },
+  { label: "Brand",               field: "brand",               group: "Core Attributes" },
+  { label: "GTIN / EAN",          field: "ean_id",              group: "Identifiers" },
+  { label: "SKU Variation",       field: "sku_variation",       group: "Identifiers" },
+  { label: "BL UPC",              field: "bl_upc",              group: "Identifiers" },
+  { label: "Description",         field: "description",         group: "Content" },
+  { label: "Short Description",   field: "short_description",   group: "Content" },
+  { label: "Meta Title",          field: "meta_title",          group: "Content" },
+  { label: "URL Key",             field: "url_key",             group: "Content" },
+  { label: "Google Category",     field: "google_category",     group: "Categorisation" },
+  { label: "BL Size",             field: "bl_size",             group: "Categorisation" },
+  { label: "Was Price",           field: "was_price",           group: "Pricing" },
+  { label: "Quantity",            field: "quantity",            group: "Pricing" },
+  { label: "Highlight 1",         field: "product_highlight1",  group: "Highlights" },
+  { label: "Highlight 2",         field: "product_highlight2",  group: "Highlights" },
+  { label: "Highlight 3",         field: "product_highlight3",  group: "Highlights" },
+  { label: "Highlight 4",         field: "product_highlight4",  group: "Highlights" },
+  { label: "Highlight 5",         field: "product_highlight5",  group: "Highlights" },
+  { label: "Additional Image 1",  field: "additional_image1",   group: "Images" },
+  { label: "Additional Image 2",  field: "additional_image2",   group: "Images" },
+  { label: "Additional Image 3",  field: "additional_image3",   group: "Images" },
+];
 
-const DATA_FIELDS    = Object.keys(FIELD_MAP);
+const FIELD_GROUPS = ALL_FIELDS.reduce((acc, f) => {
+  if (!acc[f.group]) acc[f.group] = [];
+  acc[f.group].push(f);
+  return acc;
+}, {});
+
 const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
 
-// Product row component
+// ============================================================
+// PRODUCT ROW
+// ============================================================
 function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onClear, onInputChange }) {
   const isFilled  = state?.value !== "" && state?.value != null;
   const isEditing = state?.editing;
@@ -61,7 +89,7 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
             <Input
               autoFocus
               className="h-8 text-xs bg-secondary border-border flex-1 min-w-0"
-              placeholder={`Enter ${selectedField}…`}
+              placeholder={`Enter ${selectedField.label}…`}
               value={state.inputVal}
               onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={(e) => {
@@ -103,43 +131,67 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
   );
 }
 
+// ============================================================
+// MAIN PAGE
+// ============================================================
 export default function FieldOptimization() {
-  const [searchParams]                          = useSearchParams();
-  const [products,        setProducts]          = useState([]);
-  const [loading,         setLoading]           = useState(true);
-  const [search,          setSearch]            = useState("");
-  const [selectedField,   setSelectedField]     = useState(() => {
-    // Auto-select field from URL param (from Feed Audit Fix button)
+  const [searchParams] = useSearchParams();
+  const location       = useLocation();
+
+  // ✅ Resolve initial field from navigation state or URL param
+  const resolveInitialField = () => {
+    const navField = location.state?.field;
+    if (navField) {
+      const match = ALL_FIELDS.find(f => f.field === navField);
+      if (match) return match;
+    }
     const urlField = searchParams.get('field');
     if (urlField) {
-      const match = Object.entries(FIELD_MAP).find(([, v]) => v === urlField);
-      return match ? match[0] : DATA_FIELDS[0];
+      const match = ALL_FIELDS.find(f => f.field === urlField);
+      if (match) return match;
     }
-    return DATA_FIELDS[0];
-  });
-  const [selectedTagging, setSelectedTagging]   = useState("Untagged");
-  const [selectedCategory,setSelectedCategory]  = useState("");
-  const [selectedBrand,   setSelectedBrand]     = useState("");
-  const [productStates,   setProductStates]     = useState({});
-  const [aiLoading,       setAiLoading]         = useState(false);
-  const [saving,          setSaving]            = useState(false);
+    return ALL_FIELDS[0];
+  };
+
+  const [selectedField,    setSelectedField]    = useState(resolveInitialField);
+  const [products,         setProducts]         = useState([]);
+  const [loading,          setLoading]          = useState(true);
+  const [search,           setSearch]           = useState("");
+  const [selectedTagging,  setSelectedTagging]  = useState("Untagged");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedBrand,    setSelectedBrand]    = useState("");
+  const [productStates,    setProductStates]    = useState({});
+  const [aiLoading,        setAiLoading]        = useState(false);
+  const [saving,           setSaving]           = useState(false);
 
   const { currentStoreId } = useAuth();
 
-  // Load products missing the selected field
+  // ✅ Re-sync field when navigating from FeedAudit Fix button
+  useEffect(() => {
+  console.log('location changed:', location);
+  console.log('location.state:', location.state);
+  const navField = location.state?.field;
+  console.log('navField:', navField);
+  if (navField) {
+    const match = ALL_FIELDS.find(f => f.field === navField);
+    console.log('match:', match);
+    if (match) setSelectedField(match);
+  }
+}, [location]);
+
+  // ✅ Load products missing the selected field
   const loadProducts = useCallback(async () => {
     if (!currentStoreId) return;
     setLoading(true);
     try {
-      const dbField = FIELD_MAP[selectedField];
-      const res = await API.get(`/products/missing-field?field=${dbField}`);
-      setProducts(res.data);
+      const res  = await API.get(`/products/missing-field?field=${selectedField.field}`);
+      const data = res.data ?? [];
+      setProducts(data);
 
-      // Initialize states
       const states = {};
-      res.data.forEach(p => {
+      data.forEach(p => {
         states[p.sourceId] = {
-          value:    p[dbField] || "",
+          value:    p[selectedField.field] || "",
           editing:  false,
           inputVal: "",
         };
@@ -154,26 +206,24 @@ export default function FieldOptimization() {
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
-  // Filter products
+  // Derived filters
   const brands     = [...new Set(products.map(p => p.brand).filter(Boolean))];
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   const filtered = products.filter(p => {
-    const dbField = FIELD_MAP[selectedField];
-    const ps = productStates[p.sourceId];
-    const matchesSearch   = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
-    const matchesCat      = selectedCategory ? p.category === selectedCategory : true;
-    const matchesBrand    = selectedBrand ? p.brand === selectedBrand : true;
-    const matchesTagging  =
-      selectedTagging === "All"      ? true :
-      selectedTagging === "Tagged"   ? ps?.value !== "" :
-                                       ps?.value === "" || ps?.value == null;
-    return matchesSearch && matchesCat && matchesBrand && matchesTagging;
+    const ps           = productStates[p.sourceId];
+    const matchSearch  = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
+    const matchCat     = selectedCategory ? p.category === selectedCategory : true;
+    const matchBrand   = selectedBrand    ? p.brand    === selectedBrand    : true;
+    const matchTagging =
+      selectedTagging === "All"    ? true :
+      selectedTagging === "Tagged" ? ps?.value !== "" :
+                                     ps?.value === "" || ps?.value == null;
+    return matchSearch && matchCat && matchBrand && matchTagging;
   });
 
   const filledCount = Object.values(productStates).filter(s => s.value !== "").length;
 
-  // State helpers
   function update(id, patch) {
     setProductStates(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
   }
@@ -203,24 +253,20 @@ export default function FieldOptimization() {
     update(id, { value: "", editing: false, inputVal: "" });
   }
 
-  function handleFieldChange(field) {
-    setSelectedField(field);
+  function handleFieldChange(fieldValue) {
+    const match = ALL_FIELDS.find(f => f.field === fieldValue);
+    if (match) setSelectedField(match);
   }
 
-  // AI Fill — uses Anthropic API
+  // AI Fill
   const handleAiFill = async () => {
     setAiLoading(true);
     try {
-      const unfilledProducts = products.filter(p => !productStates[p.sourceId]?.value);
+      const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
+      if (unfilled.length === 0) { toast.info("All products already filled!"); return; }
 
-      if (unfilledProducts.length === 0) {
-        toast.info("All products already filled!");
-        return;
-      }
-
-      // Call AI for each unfilled product
       const updates = await Promise.all(
-        unfilledProducts.map(async (product) => {
+        unfilled.map(async (product) => {
           try {
             const response = await fetch("https://api.anthropic.com/v1/messages", {
               method: "POST",
@@ -233,13 +279,12 @@ export default function FieldOptimization() {
                   content: `Product: "${product.product_name || product.title}"
 Brand: "${product.brand || ''}"
 Category: "${product.category || ''}"
-
-What is the "${selectedField}" for this product? 
+What is the "${selectedField.label}" for this product?
 Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
                 }]
               })
             });
-            const data = await response.json();
+            const data  = await response.json();
             const value = data.content?.[0]?.text?.trim() || "";
             return { id: product.sourceId, value };
           } catch {
@@ -248,13 +293,10 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
         })
       );
 
-      // Update states with AI suggestions
       setProductStates(prev => {
         const next = { ...prev };
         updates.forEach(({ id, value }) => {
-          if (value && next[id]) {
-            next[id] = { ...next[id], value, editing: false, inputVal: "" };
-          }
+          if (value && next[id]) next[id] = { ...next[id], value, editing: false, inputVal: "" };
         });
         return next;
       });
@@ -270,19 +312,13 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
   // Save all to DB
   const handleSaveAll = async () => {
     const filled = Object.entries(productStates).filter(([, s]) => s.value !== "");
-    if (filled.length === 0) {
-      toast.info("No values to save");
-      return;
-    }
-
+    if (filled.length === 0) { toast.info("No values to save"); return; }
     setSaving(true);
     try {
-      const dbField = FIELD_MAP[selectedField];
       const updates = filled.map(([id, s]) => ({ id, value: s.value }));
-
-      await API.put('/products/bulk-update', { field: dbField, updates });
+      await API.put('/products/bulk-update', { field: selectedField.field, updates });
       toast.success(`Saved ${filled.length} products!`);
-      loadProducts(); // Reload to reflect changes
+      loadProducts();
     } catch {
       toast.error("Failed to save");
     } finally {
@@ -317,10 +353,10 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Missing",    value: products.length,               icon: Package,      color: "text-primary",     bg: "bg-primary/10" },
-          { label: "Fields Available", value: DATA_FIELDS.length,            icon: Layers,       color: "text-info",        bg: "bg-info/10" },
-          { label: "Filled",           value: filledCount,                    icon: CheckCircle2, color: "text-success",     bg: "bg-success/10" },
-          { label: "Remaining",        value: products.length - filledCount,  icon: AlertCircle,  color: "text-warning",     bg: "bg-warning/10" },
+          { label: "Total Missing",    value: products.length,              icon: Package,      color: "text-primary",  bg: "bg-primary/10"  },
+          { label: "Fields Available", value: ALL_FIELDS.length,            icon: Layers,       color: "text-info",     bg: "bg-info/10"     },
+          { label: "Filled",           value: filledCount,                   icon: CheckCircle2, color: "text-success",  bg: "bg-success/10"  },
+          { label: "Remaining",        value: products.length - filledCount, icon: AlertCircle,  color: "text-warning",  bg: "bg-warning/10"  },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
             <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
@@ -339,18 +375,26 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
             <label className="text-xs font-medium text-muted-foreground">Data Field</label>
             <select
               className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-              value={selectedField}
+              value={selectedField.field}
               onChange={(e) => handleFieldChange(e.target.value)}
             >
-              {DATA_FIELDS.map(f => <option key={f}>{f}</option>)}
+              {Object.entries(FIELD_GROUPS).map(([group, fields]) => (
+                <optgroup key={group} label={group}>
+                  {fields.map(f => (
+                    <option key={f.field} value={f.field}>{f.label}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Status</label>
             <select className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground" value={selectedTagging} onChange={e => setSelectedTagging(e.target.value)}>
               {TAGGING_OPTIONS.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Category</label>
             <select className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
@@ -358,6 +402,7 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
               {categories.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Brand</label>
             <select className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground" value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}>
@@ -365,10 +410,12 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
               {brands.map(b => <option key={b}>{b}</option>)}
             </select>
           </div>
+
           <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Search</label>
             <Input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} className="bg-secondary border-border text-sm" />
           </div>
+
           <Button size="sm" variant="outline" onClick={() => { setSearch(""); setSelectedCategory(""); setSelectedBrand(""); setSelectedTagging("Untagged"); }}>
             Reset
           </Button>
@@ -382,20 +429,25 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
             <Sparkles className="h-4 w-4 text-purple-600" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">AI Auto-Fill — {selectedField}</p>
+            <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+              AI Auto-Fill — {selectedField.label}
+            </p>
             <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
-              AI will suggest <strong>{selectedField}</strong> values for all {products.length} missing products instantly.
+              AI will suggest <strong>{selectedField.label}</strong> values for all {products.length} missing products instantly.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {filledCount > 0 && (
-            <Button variant="outline" className="gap-2 text-destructive border-destructive/30 text-sm"
+            <Button
+              variant="outline"
+              className="gap-2 text-destructive border-destructive/30 text-sm"
               onClick={() => {
                 const reset = {};
                 products.forEach(p => { reset[p.sourceId] = { value: "", editing: false, inputVal: "" }; });
                 setProductStates(reset);
-              }}>
+              }}
+            >
               <XCircle className="h-4 w-4" /> Clear All
             </Button>
           )}
@@ -426,7 +478,10 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <p className="text-sm text-muted-foreground">
-            {loading ? "Loading..." : `Showing ${filtered.length} of ${products.length} products missing ${selectedField}`}
+            {loading
+              ? "Loading..."
+              : `Showing ${filtered.length} of ${products.length} products missing ${selectedField.label}`
+            }
           </p>
         </div>
 
@@ -438,7 +493,7 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
         ) : products.length === 0 ? (
           <div className="py-16 flex flex-col items-center justify-center gap-3">
             <CheckCircle2 className="h-10 w-10 text-success" />
-            <p className="text-success font-medium">All products have {selectedField}!</p>
+            <p className="text-success font-medium">All products have {selectedField.label}!</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -450,7 +505,7 @@ Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-primary">{selectedField}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-primary">{selectedField.label}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>

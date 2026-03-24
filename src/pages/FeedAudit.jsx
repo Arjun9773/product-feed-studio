@@ -5,6 +5,7 @@ import {
   ChevronUp, Zap, ShieldCheck, CheckCircle2, Clock, Tag,
   Image, FileText, Hash, Loader2, BarChart3
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -54,22 +55,39 @@ const PRIORITY_CONFIG = {
   },
 };
 
-const ISSUE_ICONS = {
-  "No Colour":            Tag,
-  "No Age Group":         Hash,
-  "No Gender":            Hash,
-  "No Material":          Hash,
-  "Brand not in title":   FileText,
-  "No Google Category":   BarChart3,
-  "No Pattern":           Tag,
-  "Proper casing":        FileText,
-  "No Description":       FileText,
-  "No Short Description": FileText,
-  "No GTIN":              Hash,
-  "Out of Stock":         AlertTriangle,
-  "Short product names":  FileText,
-  "No Brand":             Tag,
-  "No Additional Image":  Image,
+// ✅ Dynamic icon map by field — no hardcoded issue label matching needed
+const FIELD_ICONS = {
+  color:              Tag,
+  age_group:          Hash,
+  gender:             Hash,
+  material:           Hash,
+  pattern:            Tag,
+  brand:              Tag,
+  product_name:       FileText,
+  google_category:    BarChart3,
+  description:        FileText,
+  short_description:  FileText,
+  ean_id:             Hash,
+  meta_title:         FileText,
+  url_key:            FileText,
+  bl_size:            Hash,
+  bl_upc:             Hash,
+  sku_variation:      Hash,
+  quantity:           Hash,
+  was_price:          Hash,
+  product_highlight1: FileText,
+  product_highlight2: FileText,
+  product_highlight3: FileText,
+  product_highlight4: FileText,
+  product_highlight5: FileText,
+  additional_image1:  Image,
+  additional_image2:  Image,
+  additional_image3:  Image,
+  additional_image4:  Image,
+  additional_image5:  Image,
+  additional_image6:  Image,
+  additional_image7:  Image,
+  additional_image8:  Image,
 };
 
 // ============================================
@@ -93,20 +111,13 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }) {
 // ============================================
 // ISSUE ROW
 // ============================================
-function IssueRow({ issue, priority, totalProducts }) {
-  const cfg       = PRIORITY_CONFIG[priority];
-  const IssueIcon = ISSUE_ICONS[issue.issue] ?? Hash;
+function IssueRow({ issue, priority, totalProducts, onFix }) {
+  const cfg = PRIORITY_CONFIG[priority];
 
-  // ✅ FIX: Use the smaller of issue.products and totalProducts as the denominator
-  // This prevents showing e.g. "10/11" when only 10 products actually exist
-  const actualTotal = Math.min(issue.products, totalProducts) === issue.products
-    ? totalProducts
-    : issue.products;
+  // ✅ Use field to get icon — dynamic, no hardcoded label matching
+  const IssueIcon = FIELD_ICONS[issue.field] ?? Hash;
 
-  // ✅ Correct total: never let denominator exceed actual fetched products
-  const correctTotal = Math.min(totalProducts, issue.products <= totalProducts ? totalProducts : issue.products);
-
-  const p          = Math.round((issue.products / (correctTotal || 1)) * 100);
+  const p          = Math.round((issue.products / (totalProducts || 1)) * 100);
   const isCritical = p === 100;
 
   return (
@@ -120,7 +131,6 @@ function IssueRow({ issue, priority, totalProducts }) {
         </span>
       </div>
 
-      {/* ✅ FIXED: Show issue.products / correctTotal (never more than actual) */}
       <div className="w-20 shrink-0 text-center">
         <span className="text-sm text-muted-foreground">
           {Math.min(issue.products, totalProducts)} / {totalProducts}
@@ -135,11 +145,14 @@ function IssueRow({ issue, priority, totalProducts }) {
           {issue.percentage}
         </span>
       </div>
+
       <div className="shrink-0">
+        {/* ✅ Pass issue.field directly — no ISSUE_TO_FIELD lookup needed */}
         <Button
+          onClick={() => onFix(issue.field)}
           size="sm"
           variant={priority === "high" ? "destructive" : "outline"}
-          className="h-7 text-xs opacity-80 group-hover:opacity-100 transition-opacity"
+          className="h-7 bg-destructive hover:bg-destructive/90 text-destructive-foreground hover:text-destructive-foreground text-xs opacity-80 group-hover:opacity-100 transition-opacity"
         >
           Fix
         </Button>
@@ -151,7 +164,7 @@ function IssueRow({ issue, priority, totalProducts }) {
 // ============================================
 // PRIORITY SECTION
 // ============================================
-function PrioritySection({ priority, issues, totalProducts }) {
+function PrioritySection({ priority, issues, totalProducts, onFix }) {
   const [open, setOpen] = useState(
     priority === "high" || priority === "medium"
   );
@@ -159,7 +172,7 @@ function PrioritySection({ priority, issues, totalProducts }) {
   const Icon  = cfg.icon;
   const total = issues.length;
 
-  if (total === 0) return null; // hide empty sections
+  if (total === 0) return null;
 
   return (
     <div className={`rounded-xl border ${cfg.border} overflow-hidden`}>
@@ -196,7 +209,6 @@ function PrioritySection({ priority, issues, totalProducts }) {
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            {/* Table header */}
             <div className="flex items-center gap-4 px-4 py-2 bg-secondary/40 border-b border-border text-xs text-muted-foreground font-medium">
               <div className="flex-1">Issue</div>
               <div className="w-20 text-center">Products</div>
@@ -210,6 +222,7 @@ function PrioritySection({ priority, issues, totalProducts }) {
                 issue={issue}
                 priority={priority}
                 totalProducts={totalProducts}
+                onFix={onFix}
               />
             ))}
           </motion.div>
@@ -218,6 +231,7 @@ function PrioritySection({ priority, issues, totalProducts }) {
     </div>
   );
 }
+
 
 // ============================================
 // MAIN PAGE
@@ -229,7 +243,8 @@ export default function FeedAudit() {
   const [error,       setError]       = useState(null);
   const [lastChecked, setLastChecked] = useState(null);
 
-  // ✅ AuthContext — single source of truth
+  const navigate = useNavigate();
+
   const {
     user,
     currentStoreId,
@@ -240,14 +255,23 @@ export default function FeedAudit() {
   const token = user?.token || localStorage.getItem('token');
 
   // ----------------------------------------
-  // Fetch audit data from API
+  // ✅ handleFix — receives field directly from issue.field
+  // No ISSUE_TO_FIELD lookup needed anymore
+  // ----------------------------------------
+  function handleFix(field) {
+    if (field) {
+      navigate('/field-optimization', { state: { field } });
+    }
+  }
+
+  // ----------------------------------------
+  // Fetch audit data
   // ----------------------------------------
   async function fetchAuditData() {
     if (!currentStoreId) {
       setLoading(false);
       return;
     }
-
     try {
       setLoading(true);
       setError(null);
@@ -266,26 +290,18 @@ export default function FeedAudit() {
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
 
-      // ✅ FIX: Normalize totalProducts to match actual fetched count
-      // If API returns more issues.products than totalProducts,
-      // cap totalProducts to the max issue.products found
       const rawData = json.data;
       const allIssuesList = Object.values(rawData.issues || {}).flat();
       const maxProductCount = allIssuesList.length > 0
         ? Math.max(...allIssuesList.map(i => i.products ?? 0))
         : rawData.totalProducts;
 
-      // ✅ correctTotalProducts: never let declared total exceed actual fetched
-      const correctTotalProducts = Math.min(rawData.totalProducts, maxProductCount <= rawData.totalProducts
-        ? rawData.totalProducts
-        : maxProductCount
+      const correctTotalProducts = Math.min(
+        rawData.totalProducts,
+        maxProductCount <= rawData.totalProducts ? rawData.totalProducts : maxProductCount
       );
 
-      setData({
-        ...rawData,
-        totalProducts: correctTotalProducts, // ✅ use corrected total
-      });
-
+      setData({ ...rawData, totalProducts: correctTotalProducts });
       setLastChecked(new Date());
 
     } catch (err) {
@@ -296,13 +312,12 @@ export default function FeedAudit() {
   }
 
   // ----------------------------------------
-  // Manual refresh — triggers cron then refetch
+  // Manual refresh
   // ----------------------------------------
   async function handleRefresh() {
     if (!currentStoreId) return;
     try {
       setRefreshing(true);
-
       await fetch(
         `${API_BASE}/api/audit/refresh?companyId=${currentStoreId}`,
         {
@@ -314,11 +329,8 @@ export default function FeedAudit() {
           }
         }
       );
-
-      // Wait 3s for import + audit to complete
       await new Promise(r => setTimeout(r, 3000));
       await fetchAuditData();
-
     } catch (err) {
       setError(err.message);
     } finally {
@@ -326,27 +338,24 @@ export default function FeedAudit() {
     }
   }
 
-  // ✅ Re-fetch when store switches in header
   useEffect(() => {
     fetchAuditData();
   }, [currentStoreId]);
 
   // ----------------------------------------
-  // Loading state
+  // Loading
   // ----------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-3 text-muted-foreground">
-          Loading audit data...
-        </span>
+        <span className="ml-3 text-muted-foreground">Loading audit data...</span>
       </div>
     );
   }
 
   // ----------------------------------------
-  // No store selected (superadmin only)
+  // No store selected
   // ----------------------------------------
   if (isSuperAdmin && !currentStoreId) {
     return (
@@ -360,16 +369,14 @@ export default function FeedAudit() {
   }
 
   // ----------------------------------------
-  // Error state
+  // Error
   // ----------------------------------------
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <AlertTriangle className="h-10 w-10 text-destructive" />
         <p className="text-destructive font-medium">{error}</p>
-        <Button onClick={fetchAuditData} variant="outline">
-          Try Again
-        </Button>
+        <Button onClick={fetchAuditData} variant="outline">Try Again</Button>
       </div>
     );
   }
@@ -378,15 +385,12 @@ export default function FeedAudit() {
 
   const { totalProducts, totalIssues, healthScore, issues } = data;
 
-  // ✅ Early return — products இல்லன்னா
+  // ----------------------------------------
+  // No products
+  // ----------------------------------------
   if (totalProducts === 0) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
-      >
-        {/* Header only — no buttons */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Feed Audit</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -396,34 +400,28 @@ export default function FeedAudit() {
             }
           </p>
         </div>
-
-        {/* Empty State */}
         <div className="flex flex-col items-center justify-center h-64 border rounded-xl border-dashed gap-4">
           <div className="p-4 rounded-full bg-muted/50">
             <BarChart3 className="h-10 w-10 text-muted-foreground" />
           </div>
           <div className="text-center space-y-1">
-            <h3 className="text-base font-semibold text-foreground">
-              No Products Found
-            </h3>
+            <h3 className="text-base font-semibold text-foreground">No Products Found</h3>
             <p className="text-sm text-muted-foreground max-w-xs">
               Your feed has not been set up yet. Add your products to start seeing audit results.
             </p>
           </div>
         </div>
-
       </motion.div>
     );
   }
 
-
-  // Quick wins — issues affecting less than 50% of products
   const allIssues = Object.values(issues).flat();
+
+  // ✅ Quick wins uses issue.field directly
   const quickWins = allIssues
     .filter(i  => parseFloat(i.percentage) < 50)
     .sort((a, b) => parseFloat(a.percentage) - parseFloat(b.percentage))
     .slice(0, 3);
-    
 
   return (
     <motion.div
@@ -431,7 +429,6 @@ export default function FeedAudit() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-
       {/* ---- Header ---- */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
@@ -519,10 +516,7 @@ export default function FeedAudit() {
           <div className="flex items-center gap-2 mb-3">
             <Zap className="h-4 w-4 text-success" />
             <h2 className="font-semibold text-sm">Quick Wins</h2>
-            <Badge
-              variant="outline"
-              className="text-success border-success/50 text-xs ml-1"
-            >
+            <Badge variant="outline" className="text-success border-success/50 text-xs ml-1">
               Easiest to fix
             </Badge>
           </div>
@@ -539,7 +533,9 @@ export default function FeedAudit() {
                     {w.products} products · {w.percentage}
                   </p>
                 </div>
+                {/* ✅ Pass w.field directly */}
                 <Button
+                  onClick={() => handleFix(w.field)}
                   size="sm"
                   variant="outline"
                   className="h-7 text-xs border-success/40 text-success hover:bg-success/10 shrink-0"
@@ -558,34 +554,25 @@ export default function FeedAudit() {
           All Issues
         </h2>
 
-        {totalProducts === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 border rounded-xl border-dashed gap-3">
-              <BarChart3 className="h-10 w-10 text-muted-foreground" />
-              <p className="text-muted-foreground font-medium text-sm">
-                No products found — please set up your feed.
-              </p>
-            </div>
-
-          ) : allIssues.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 border rounded-xl border-dashed gap-3">
-              <CheckCircle2 className="h-10 w-10 text-success" />
-              <p className="text-success font-medium text-sm">
-                No issues found — your feed looks great!
-              </p>
-            </div>
-
-          ) : (
-            Object.keys(PRIORITY_CONFIG).map(priority => (
-              <PrioritySection
-                key={priority}
-                priority={priority}
-                issues={issues[priority] ?? []}
-                totalProducts={totalProducts}
-              />
-            ))
-          )}
+        {allIssues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 border rounded-xl border-dashed gap-3">
+            <CheckCircle2 className="h-10 w-10 text-success" />
+            <p className="text-success font-medium text-sm">
+              No issues found — your feed looks great!
+            </p>
+          </div>
+        ) : (
+          Object.keys(PRIORITY_CONFIG).map(priority => (
+            <PrioritySection
+              key={priority}
+              priority={priority}
+              issues={issues[priority] ?? []}
+              totalProducts={totalProducts}
+              onFix={handleFix}
+            />
+          ))
+        )}
       </div>
-
     </motion.div>
   );
 }
