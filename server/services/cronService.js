@@ -4,7 +4,6 @@ const axios    = require('axios');
 const mongoose = require('mongoose');
 const { getTenantDb } = require('../config/db');
 
-// ─── SCHEMAS ─────────────────────────────────────────────────
 const ProductSchema          = require('../models/Product');
 const FeedAuditProductSchema = require('../models/FeedAuditProduct');
 const AuditLogSchema         = require('../models/AuditLog');
@@ -13,19 +12,30 @@ const FeedAuditIssueSchema   = require('../models/FeedAuditIssue');
 const activeCrons = new Map();
 
 // ============================================
+// PROTECTED FIELDS
+// — Feed refresh-ல் manually filled values
+//   overwrite ஆகக்கூடாது
+// ============================================
+const PROTECTED_FIELDS = [
+  'color', 'gender', 'age_group', 'material', 'pattern', 'brand',
+  'description', 'short_description', 'ean_id', 'google_category',
+  'meta_title', 'url_key', 'bl_size', 'quantity', 'was_price',
+  'sku_variation', 'bl_upc',
+  'product_highlight1', 'product_highlight2', 'product_highlight3',
+  'product_highlight4', 'product_highlight5',
+  'additional_image1', 'additional_image2', 'additional_image3',
+  'additional_image4', 'additional_image5', 'additional_image6',
+  'additional_image7', 'additional_image8',
+];
+
+// ============================================
 // AUDIT ISSUE CACHE
-// — Server start-ல ஒருமுறை DB-லிருந்து load,
-//   அதுக்கு பிறகு memory-லிருந்து reuse.
-//   Admin panel-ல issue update பண்ணா
-//   clearAuditIssueCache() call பண்ணு.
 // ============================================
 let cachedAuditIssues = null;
 
 async function getAuditIssues() {
   if (cachedAuditIssues) return cachedAuditIssues;
 
-  // உன் project-ல் getMainDb இல்லை —
-  // main DB என்பது mongoose.connection தான்
   const FeedAuditIssueModel =
     mongoose.models?.FeedAuditIssue ||
     mongoose.model('FeedAuditIssue', FeedAuditIssueSchema);
@@ -43,7 +53,7 @@ function clearAuditIssueCache() {
 }
 
 // ============================================
-// GET TENANT MODELS (schema-aware, per tenant)
+// GET TENANT MODELS
 // ============================================
 function getTenantModels(tenantId) {
   const tenantDb = getTenantDb(tenantId);
@@ -79,7 +89,7 @@ function buildCronExpression(schedule, scheduleTime) {
 }
 
 // ============================================
-// KEYWORD LISTS — for title extraction
+// KEYWORD LISTS
 // ============================================
 const COLOR_KEYWORDS = [
   'red','blue','green','black','white','silver','gold',
@@ -114,11 +124,9 @@ const GENDER_KEYWORDS = [
   'unisex','kids','children'
 ];
 
-
 // ============================================
 // HELPERS
 // ============================================
-
 function isEmpty(value) {
   return (
     value === null      ||
@@ -142,8 +150,6 @@ function extractFromTitle(title, keywords) {
 
 // ============================================
 // TITLE ENRICHMENT
-// — If field is empty, extract from title
-// — If found in title, save that value to DB
 // ============================================
 function enrichProductFromTitle(product) {
   const title = product.product_name || '';
@@ -192,15 +198,7 @@ function enrichProductFromTitle(product) {
 }
 
 // ============================================
-// AUDIT FUNCTION (DB-driven — no hardcode)
-//
-// auditIssues → getAuditIssues() return value
-// (already fetched once per cron run — cached)
-//
-// Special fields:
-//   brand_in_title → brand title-ல் இருக்கா check
-//   proper_casing  → title ALL CAPS / all lower check
-//   மத்தது எல்லாம் → isEmpty(product[field]) generic check
+// AUDIT FUNCTION
 // ============================================
 function auditProduct(product, auditIssues) {
   const issues = [];
@@ -209,7 +207,6 @@ function auditProduct(product, auditIssues) {
   for (const issueDef of auditIssues) {
     const { field, label, priority, status } = issueDef;
 
-    // ── Special: brand not in title ──────────────────────
     if (field === 'brand_in_title') {
       if (
         !isEmpty(product.brand) &&
@@ -221,7 +218,6 @@ function auditProduct(product, auditIssues) {
       continue;
     }
 
-    // ── Special: proper casing ────────────────────────────
     if (field === 'proper_casing') {
       if (!isEmpty(title)) {
         const isAllCaps  = title === title.toUpperCase();
@@ -233,7 +229,6 @@ function auditProduct(product, auditIssues) {
       continue;
     }
 
-    // ── Generic: missing field check ──────────────────────
     if (isEmpty(product[field])) {
       issues.push({ field, label, priority, status });
     }
@@ -255,7 +250,7 @@ function auditProduct(product, auditIssues) {
 }
 
 // ============================================
-// SAVE AUDIT TO feed_audit_products
+// SAVE AUDIT RESULT
 // ============================================
 async function saveAuditResult(FeedAuditProductModel, product, auditResult) {
   await FeedAuditProductModel.updateOne(
@@ -303,23 +298,17 @@ async function importFeedForTenant(tenantId, feed) {
 
     console.log(`[CRON] ✔ Fetched ${products.length} products for tenant: ${tenantId}`);
 
-    // Step 3: Get schema-aware tenant models
+    // Step 3: Get tenant models
     const { ProductModel, FeedAuditProductModel, AuditLogModel } = getTenantModels(tenantId);
 
-    // Step 4: Load audit issues ONCE per cron run (cached after first load)
-    // 10,000 products இருந்தாலும் DB-க்கு ஒரே ஒரு query போகும்
+    // Step 4: Load audit issues (cached)
     const auditIssues = await getAuditIssues();
     console.log(`[CRON] ✔ Using ${auditIssues.length} audit issue definitions`);
 
-    // Step 5: Mark ALL existing products inactive before import
+    // Step 5: Mark all existing products inactive
     await ProductModel.updateMany(
       { tenantId },
-      {
-        $set: {
-          is_active:     false,
-          deactivatedAt: new Date(),
-        },
-      }
+      { $set: { is_active: false, deactivatedAt: new Date() } }
     );
     console.log(`[CRON] ✔ Marked all products inactive for tenant: ${tenantId}`);
 
@@ -355,7 +344,25 @@ async function importFeedForTenant(tenantId, feed) {
 
       if (before !== after) enrichedCount++;
 
-      // ─── STEP 6b: Upsert enriched product to DB ──────────
+      // ─── STEP 6b: Protect manually filled values ─────────
+      // DB-ல் existing product-ல் manually filled values
+      // feed refresh-ல் overwrite ஆகக்கூடாது
+      const existing = await ProductModel.findOne(
+        { sourceId: String(uniqueId) },
+        PROTECTED_FIELDS.join(' ')
+      ).lean();
+
+      if (existing) {
+        for (const field of PROTECTED_FIELDS) {
+          // Feed-ல் empty, DB-ல் value இருக்கு → DB value keep
+          if (isEmpty(product[field]) && !isEmpty(existing[field])) {
+            product[field] = existing[field];
+            console.log(`[PROTECT] ${field} → kept DB value "${existing[field]}" for ${uniqueId}`);
+          }
+        }
+      }
+
+      // ─── STEP 6c: Upsert product to DB ───────────────────
       const result = await ProductModel.updateOne(
         { sourceId: String(uniqueId) },
         {
@@ -368,9 +375,7 @@ async function importFeedForTenant(tenantId, feed) {
             deactivatedAt: null,
             updatedAt:     new Date(),
           },
-          $setOnInsert: {
-            importedAt: new Date(),
-          },
+          $setOnInsert: { importedAt: new Date() },
         },
         { upsert: true }
       );
@@ -383,10 +388,7 @@ async function importFeedForTenant(tenantId, feed) {
         unchangedCount++;
       }
 
-      // ─── STEP 6c: Audit enriched product ─────────────────
-      // Audit runs AFTER enrichment — so if title had color,
-      // product.color is now set → No Colour issue won't appear.
-      // auditIssues already loaded above — no extra DB hit here.
+      // ─── STEP 6d: Audit enriched product ─────────────────
       const auditResult = auditProduct(product, auditIssues);
       await saveAuditResult(FeedAuditProductModel, product, auditResult);
 
@@ -396,7 +398,7 @@ async function importFeedForTenant(tenantId, feed) {
       auditSummary.others += auditResult.summary.others;
     }
 
-    // Step 7: Count inactive products (removed from feed)
+    // Step 7: Count inactive products
     const inactiveCount = await ProductModel.countDocuments({
       tenantId,
       is_active: false,
@@ -407,7 +409,8 @@ async function importFeedForTenant(tenantId, feed) {
     console.log(`        ✏️  Updated:    ${updatedCount}`);
     console.log(`        ✅ Unchanged:   ${unchangedCount}`);
     console.log(`        💤 Inactive:   ${inactiveCount}`);
-    console.log(`        🔍 Enriched:   ${enrichedCount} (title-லிருந்து values filled)`);
+    console.log(`        🔍 Enriched:   ${enrichedCount}`);
+    console.log(`        🛡️  Protected:  manually filled values kept`);
     console.log(`[CRON] ✔ Audit — High: ${auditSummary.high}, Medium: ${auditSummary.medium}, Low: ${auditSummary.low}, Others: ${auditSummary.others}`);
 
     // Step 8: Save import log
@@ -523,5 +526,5 @@ module.exports = {
   registerFeedCron,
   getCronStatus,
   importFeedForTenant,
-  clearAuditIssueCache, // ← Admin panel-ல் issue update பண்ணா இதை call பண்ணு
+  clearAuditIssueCache,
 };
