@@ -3,8 +3,10 @@ const auth = require('../../middleware/auth');
 const tenantResolver = require('../../middleware/tenantResolver');
 const { importFeedForTenant } = require('../../services/cronService');
 const Merchant = require('../../models/Merchant');
+const FeedAuditIssueSchema = require('../../models/FeedAuditIssue');
 
 const router = express.Router();
+const mongoose             = require('mongoose');
 
 // ============================================
 // CONSTANTS
@@ -149,6 +151,35 @@ router.post('/refresh', auth, tenantResolver, async (req, res) => {
   } catch (error) {
     console.error('[audit/refresh] Error:', error);
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+const PRIORITY_ORDER = { high: 1, medium: 2, low: 3, others: 4 };
+// ============================================
+// GET /api/audit/fields
+// Feed audit issue definitions from DB
+// ============================================
+router.get('/fields', auth, tenantResolver, async (req, res) => {
+  try {
+    const FeedAuditIssue =
+      mongoose.models?.FeedAuditIssue ||
+      mongoose.model('FeedAuditIssue', FeedAuditIssueSchema);
+
+    const fields = await FeedAuditIssue
+      .find({ isActive: true })
+      .select('field label group priority status')
+      .lean();
+
+    // Priority correct order-ல் sort
+    fields.sort((a, b) =>
+      (PRIORITY_ORDER[a.priority] ?? 5) - (PRIORITY_ORDER[b.priority] ?? 5)
+    );
+
+    return res.json({ success: true, data: fields });
+
+  } catch (err) {
+    console.error('[AUDIT] /fields error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 

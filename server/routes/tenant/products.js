@@ -52,24 +52,24 @@ router.post('/', auth, tenantResolver, async (req, res) => {
 });
 
 // PUT /api/products/:id — Update single product field
-router.put('/:id', auth, tenantResolver, async (req, res) => {
-  const { ObjectId } = require('mongodb');
-  try {
-    await req.tenantDb.collection('products').updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { ...req.body, updatedAt: new Date() } }
-    );
-    res.json({ message: 'Product updated' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// router.put('/:id', auth, tenantResolver, async (req, res) => {
+//   const { ObjectId } = require('mongodb');
+//   try {
+//     await req.tenantDb.collection('products').updateOne(
+//       { _id: new ObjectId(req.params.id) },
+//       { $set: { ...req.body, updatedAt: new Date() } }
+//     );
+//     res.json({ message: 'Product updated' });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// });
 
 // PUT /api/products/bulk-update — Update multiple products at once
+// ✅ STEP 1: bulk-update FIRST (before /:id)
 router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
   try {
     const { field, updates } = req.body;
-    // updates = [{ id: "xxx", value: "Red" }, ...]
 
     const bulkOps = updates.map(({ id, value }) => ({
       updateOne: {
@@ -80,20 +80,29 @@ router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
 
     await req.tenantDb.collection('products').bulkWrite(bulkOps);
 
-    // Update audit results too
     const auditBulkOps = updates.map(({ id }) => ({
       updateOne: {
         filter: { sourceId: String(id) },
-        update: {
-          $pull: {
-            issues: { field }
-          }
-        }
+        update: { $pull: { issues: { field } } }
       }
     }));
     await req.tenantDb.collection('feed_audit_products').bulkWrite(auditBulkOps);
 
     res.json({ message: 'Products updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ✅ STEP 2: /:id AFTER
+router.put('/:id', auth, tenantResolver, async (req, res) => {
+  const { ObjectId } = require('mongodb');
+  try {
+    await req.tenantDb.collection('products').updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { ...req.body, updatedAt: new Date() } }
+    );
+    res.json({ message: 'Product updated' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
