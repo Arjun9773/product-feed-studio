@@ -368,6 +368,7 @@ async function importFeedForTenant(tenantId, feed) {
         {
           $set: {
             ...product,
+            products_url:  rawProduct.products_url || rawProduct.product_url || null, // ← இது add பண்ணணும்
             sourceId:      String(uniqueId),
             feedId:        String(feed._id),
             tenantId:      tenantId,
@@ -376,6 +377,7 @@ async function importFeedForTenant(tenantId, feed) {
             updatedAt:     new Date(),
           },
           $setOnInsert: { importedAt: new Date() },
+          field_optimization_status: 'pending',
         },
         { upsert: true }
       );

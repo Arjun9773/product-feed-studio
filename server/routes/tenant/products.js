@@ -17,19 +17,49 @@ router.get('/', auth, tenantResolver, async (req, res) => {
 });
 
 // GET /api/products/missing-field?field=color — Products missing a specific field
+// router.get('/missing-field', auth, tenantResolver, async (req, res) => {
+//   try {
+//     const { field } = req.query;
+//     if (!field) return res.status(400).json({ message: 'Field is required' });
+
+//     // Find products where field is empty/null/missing
+//     const products = await req.tenantDb.collection('products').find({
+//       is_active: true,
+//       $or: [
+//         { [field]: { $exists: false } },
+//         { [field]: null },
+//         { [field]: '' },
+//       ]
+//     }).toArray();
+
+//     res.json(products);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// });
 router.get('/missing-field', auth, tenantResolver, async (req, res) => {
   try {
-    const { field } = req.query;
+    const { field, label } = req.query;
     if (!field) return res.status(400).json({ message: 'Field is required' });
 
-    // Find products where field is empty/null/missing
+    const auditCol = req.tenantDb.collection('feed_audit_products');
+
+    // label இருந்தா field + label match, இல்லன்னா field மட்டும்
+    const matchQuery = label
+      ? { field, label: decodeURIComponent(label) }
+      : { field };
+
+    const auditDocs = await auditCol.find({
+      issues: { $elemMatch: matchQuery }
+    }).toArray();
+
+    if (auditDocs.length === 0) return res.json([]);
+
+    const sourceIds = auditDocs.map(doc => doc.sourceId);
+
     const products = await req.tenantDb.collection('products').find({
       is_active: true,
-      $or: [
-        { [field]: { $exists: false } },
-        { [field]: null },
-        { [field]: '' },
-      ]
+      sourceId: { $in: sourceIds }
     }).toArray();
 
     res.json(products);
@@ -67,6 +97,32 @@ router.post('/', auth, tenantResolver, async (req, res) => {
 
 // PUT /api/products/bulk-update — Update multiple products at once
 // ✅ STEP 1: bulk-update FIRST (before /:id)
+// router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
+//   try {
+//     const { field, updates } = req.body;
+
+//     const bulkOps = updates.map(({ id, value }) => ({
+//       updateOne: {
+//         filter: { sourceId: String(id) },
+//         update: { $set: { [field]: value, updatedAt: new Date() } }
+//       }
+//     }));
+
+//     await req.tenantDb.collection('products').bulkWrite(bulkOps);
+
+//     const auditBulkOps = updates.map(({ id }) => ({
+//       updateOne: {
+//         filter: { sourceId: String(id) },
+//         update: { $pull: { issues: { field } } }
+//       }
+//     }));
+//     await req.tenantDb.collection('feed_audit_products').bulkWrite(auditBulkOps);
+
+//     res.json({ message: 'Products updated successfully' });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// });
 router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
   try {
     const { field, updates } = req.body;
@@ -74,7 +130,13 @@ router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
     const bulkOps = updates.map(({ id, value }) => ({
       updateOne: {
         filter: { sourceId: String(id) },
-        update: { $set: { [field]: value, updatedAt: new Date() } }
+        update: { 
+          $set: { 
+            [field]:                    value, 
+            field_optimization_status: 'completed',  // ← இது மட்டும் add பண்ணணும்
+            updatedAt:                  new Date() 
+          } 
+        }
       }
     }));
 

@@ -19,6 +19,7 @@ const ProductSchema = new mongoose.Schema(
     was_price:       { type: Number, default: null },
     stock:           { type: Number, default: null },
     quantity:        { type: Number, default: null },
+    product_url:    { type: String, default: null },
 
     // ─── DESCRIPTIONS  
     description:       { type: String, default: null },
@@ -61,6 +62,7 @@ const ProductSchema = new mongoose.Schema(
     importedAt:    { type: Date,    default: null },
     updatedAt:     { type: Date,    default: null },
     title_optimization_status: { type: String, enum: ['pending', 'optimized', 'failed'], default: 'pending' },
+    field_optimization_status: { type: String, enum: ['pending', 'optimized', 'failed'], default: 'pending' },
   },
   {
     timestamps: false,

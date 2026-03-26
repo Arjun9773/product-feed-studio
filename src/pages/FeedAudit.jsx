@@ -149,7 +149,8 @@ function IssueRow({ issue, priority, totalProducts, onFix }) {
       <div className="shrink-0">
         {/* ✅ Pass issue.field directly — no ISSUE_TO_FIELD lookup needed */}
         <Button
-          onClick={() => onFix(issue.field)}
+          // onClick={() => onFix(issue.field)}
+          onClick={() => onFix(issue.field, issue.issue)}
           size="sm"
           variant={priority === "high" ? "destructive" : "outline"}
           className="h-7 bg-destructive hover:bg-destructive/90 text-destructive-foreground hover:text-destructive-foreground text-xs opacity-80 group-hover:opacity-100 transition-opacity"
@@ -258,9 +259,32 @@ export default function FeedAudit() {
   // ✅ handleFix — receives field directly from issue.field
   // No ISSUE_TO_FIELD lookup needed anymore
   // ----------------------------------------
-  function handleFix(field) {
-    if (field) {
-      navigate('/field-optimization', { state: { field } });
+  // function handleFix(field) {
+  //   if (field) {
+  //     navigate('/field-optimization', { state: { field } });
+  //   }
+  // }
+  const FIELD_ROUTES = {
+    google_category: '/google-category',
+    proper_casing:   '/title-optimization',
+  };
+
+  // function handleFix(field) {
+  //   if (!field) return;
+    
+  //   if (FIELD_ROUTES[field]) {
+  //     navigate(FIELD_ROUTES[field]);
+  //   } else {
+  //     navigate('/field-optimization', { state: { field } });
+  //   }
+  // }
+
+  function handleFix(field, label) {
+    if (!field) return;
+    if (FIELD_ROUTES[field]) {
+      navigate(FIELD_ROUTES[field]);
+    } else {
+      navigate('/field-optimization', { state: { field, label } });
     }
   }
 
@@ -530,12 +554,12 @@ export default function FeedAudit() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{w.issue}</p>
                   <p className="text-xs text-muted-foreground">
-                    {w.products} products · {w.percentage}
+                    {w.products} {w.products === 1 ? 'product' : 'products'} · {w.percentage}
                   </p>
                 </div>
                 {/* ✅ Pass w.field directly */}
                 <Button
-                  onClick={() => handleFix(w.field)}
+                  onClick={() => handleFix(w.field, w.issue)}
                   size="sm"
                   variant="outline"
                   className="h-7 text-xs border-success/40 text-success hover:bg-success/10 shrink-0"

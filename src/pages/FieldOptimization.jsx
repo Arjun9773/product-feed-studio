@@ -214,7 +214,10 @@ export default function FieldOptimization() {
     if (!currentStoreId || !selectedField) return;
     setLoading(true);
     try {
-      const res  = await API.get(`/products/missing-field?field=${selectedField.field}`);
+     const label = location.state?.label || '';
+    const res = await API.get(
+      `/products/missing-field?field=${selectedField.field}&label=${encodeURIComponent(label)}`
+    );
       const data = res.data ?? [];
       setProducts(data);
 
@@ -290,61 +293,95 @@ export default function FieldOptimization() {
   }
 
   // ── AI Fill ────────────────────────────────────────────────
-  const handleAiFill = async () => {
-    if (!selectedField) return;
-    setAiLoading(true);
-    try {
-      const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
-      if (unfilled.length === 0) {
-        toast.info("All products already filled!");
-        return;
-      }
+//   const handleAiFill = async () => {
+//     if (!selectedField) return;
+//     setAiLoading(true);
+//     try {
+//       const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
+//       if (unfilled.length === 0) {
+//         toast.info("All products already filled!");
+//         return;
+//       }
 
-      const updates = await Promise.all(
-        unfilled.map(async (product) => {
-          try {
-            const response = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 100,
-                messages: [{
-                  role: "user",
-                  content: `Product: "${product.product_name || product.title}"
-Brand: "${product.brand || ''}"
-Category: "${product.category || ''}"
-What is the "${selectedField.label}" for this product?
-Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
-                }]
-              })
-            });
-            const data  = await response.json();
-            const value = data.content?.[0]?.text?.trim() || "";
-            return { id: product.sourceId, value };
-          } catch {
-            return { id: product.sourceId, value: "" };
-          }
-        })
-      );
+//       const updates = await Promise.all(
+//         unfilled.map(async (product) => {
+//           try {
+//             const response = await fetch("https://api.anthropic.com/v1/messages", {
+//               method: "POST",
+//               headers: { "Content-Type": "application/json" },
+//               body: JSON.stringify({
+//                 model: "claude-sonnet-4-20250514",
+//                 max_tokens: 100,
+//                 messages: [{
+//                   role: "user",
+//                   content: `Product: "${product.product_name || product.title}"
+// Brand: "${product.brand || ''}"
+// Category: "${product.category || ''}"
+// What is the "${selectedField.label}" for this product?
+// Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
+//                 }]
+//               })
+//             });
+//             const data  = await response.json();
+//             const value = data.content?.[0]?.text?.trim() || "";
+//             return { id: product.sourceId, value };
+//           } catch {
+//             return { id: product.sourceId, value: "" };
+//           }
+//         })
+//       );
 
-      setProductStates(prev => {
-        const next = { ...prev };
-        updates.forEach(({ id, value }) => {
-          if (value && next[id]) {
-            next[id] = { ...next[id], value, editing: false, inputVal: "" };
-          }
-        });
-        return next;
-      });
+//       setProductStates(prev => {
+//         const next = { ...prev };
+//         updates.forEach(({ id, value }) => {
+//           if (value && next[id]) {
+//             next[id] = { ...next[id], value, editing: false, inputVal: "" };
+//           }
+//         });
+//         return next;
+//       });
 
-      toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
-    } catch {
-      toast.error("AI fill failed");
-    } finally {
-      setAiLoading(false);
+//       toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
+//     } catch {
+//       toast.error("AI fill failed");
+//     } finally {
+//       setAiLoading(false);
+//     }
+//   };
+const handleAiFill = async () => {
+  if (!selectedField) return;
+  setAiLoading(true);
+  try {
+    const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
+    if (unfilled.length === 0) {
+      toast.info("All products already filled!");
+      return;
     }
-  };
+
+    const res = await API.post('/ai/fill-field', {
+      products:   unfilled,
+      fieldLabel: selectedField.label,
+    });
+
+    const updates = res.data?.data ?? [];
+
+    setProductStates(prev => {
+      const next = { ...prev };
+      updates.forEach(({ id, value }) => {
+        if (value && next[id]) {
+          next[id] = { ...next[id], value, editing: false, inputVal: '' };
+        }
+      });
+      return next;
+    });
+
+    toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
+  } catch {
+    toast.error('AI fill failed');
+  } finally {
+    setAiLoading(false);
+  }
+};
 
   // ── Save all to DB ─────────────────────────────────────────
   // const handleSaveAll = async () => {
