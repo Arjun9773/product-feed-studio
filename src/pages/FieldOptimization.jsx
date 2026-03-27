@@ -25,6 +25,7 @@ const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
 function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onClear, onInputChange }) {
   const isFilled  = state?.value !== "" && state?.value != null;
   const isEditing = state?.editing;
+  const isDesc    = selectedField?.field === "description";
 
   return (
     <tr
@@ -71,37 +72,40 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
       {/* Field Value */}
       <td className="px-4 py-3 min-w-[200px]">
         {isEditing ? (
-          <div
-            className="flex items-center gap-1.5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Input
-              autoFocus
-              className="h-8 text-xs bg-secondary border-border flex-1 min-w-0"
-              placeholder={`Enter ${selectedField.label}…`}
-              value={state.inputVal}
-              onChange={(e) => onInputChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && state.inputVal.trim()) onSave();
-                if (e.key === "Escape") onSelect();
-              }}
-            />
-            <Button
-              size="sm"
-              className="h-8 w-8 p-0 shrink-0"
-              onClick={onSave}
-              disabled={!state.inputVal.trim()}
-            >
-              <Check className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 shrink-0"
-              onClick={onSelect}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
+          <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+            {isDesc ? (
+              <textarea
+                autoFocus
+                rows={4}
+                className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all leading-relaxed"
+                placeholder={`Enter ${selectedField.label}…`}
+                value={state.inputVal}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.ctrlKey && state.inputVal.trim()) onSave();
+                  if (e.key === "Escape") onSelect();
+                }}
+              />
+            ) : (
+              <Input
+                autoFocus
+                className="h-9 text-sm bg-secondary border-border"
+                placeholder={`Enter ${selectedField.label}…`}
+                value={state.inputVal}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && state.inputVal.trim()) onSave();
+                  if (e.key === "Escape") onSelect();
+                }}
+              />
+            )}
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="h-7 text-xs gap-1 px-3" onClick={onSave} disabled={!state.inputVal.trim()}>
+                <Check className="h-3 w-3" />
+                {isDesc ? "Save" : "Save"}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>Cancel</Button>
+            </div>
           </div>
         ) : isFilled ? (
           <div className="flex items-center gap-2">

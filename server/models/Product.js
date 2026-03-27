@@ -8,7 +8,8 @@ const ProductSchema = new mongoose.Schema(
     feedId:     { type: String, required: true },
     tenantId:   { type: String, required: true },
     item_code:  { type: String, default: null },
-    ean_id:     { type: String, default: null },   // GTIN
+    ean_id:     { type: String, default: null },
+    gtin:       { type: String, default: null },   // GTIN
 
     // ─── BASIC INFO ──────────────────────────────────────────
     product_name:    { type: String, default: null },

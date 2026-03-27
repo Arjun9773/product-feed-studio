@@ -20,7 +20,7 @@ const PROTECTED_FIELDS = [
   'color', 'gender', 'age_group', 'material', 'pattern', 'brand',
   'description', 'short_description', 'ean_id', 'google_category',
   'meta_title', 'url_key', 'bl_size', 'quantity', 'was_price',
-  'sku_variation', 'bl_upc',
+  'sku_variation', 'bl_upc','gtin',
   'product_highlight1', 'product_highlight2', 'product_highlight3',
   'product_highlight4', 'product_highlight5',
   'additional_image1', 'additional_image2', 'additional_image3',
@@ -41,6 +41,7 @@ async function getAuditIssues() {
     mongoose.model('FeedAuditIssue', FeedAuditIssueSchema);
 
   const issues = await FeedAuditIssueModel.find({ isActive: true }).lean();
+  console.log(`[AUDIT] DB: ${FeedAuditIssueModel.db.name}, found: ${issues.length}`);
   cachedAuditIssues = issues;
 
   console.log(`[AUDIT] ✔ Loaded ${issues.length} audit issue definitions from DB`);
@@ -368,6 +369,7 @@ async function importFeedForTenant(tenantId, feed) {
         {
           $set: {
             ...product,
+             gtin:          rawProduct.gtin || null,
             products_url:  rawProduct.products_url || rawProduct.product_url || null, // ← இது add பண்ணணும்
             sourceId:      String(uniqueId),
             feedId:        String(feed._id),

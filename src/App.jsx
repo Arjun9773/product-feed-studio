@@ -16,6 +16,7 @@ import GoogleCategory from "@/pages/GoogleCategory";
 import FieldOptimization from "@/pages/FieldOptimization";
 import FeedAudit from "@/pages/FeedAudit";
 import ManageFeedSetup from "@/pages/ManageFeedSetup";
+import KeywordOptimization from "@/pages/KeywordOptimization";
 import CustomLabels from "@/pages/CustomLabels";
 import NotFound from "@/pages/NotFound";
 import Settings from "./pages/Settings";
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/feed-audit" element={<FeedAudit />} />
               <Route path="/manage-feed-setup" element={<ManageFeedSetup />} />
               <Route path="/custom-labels" element={<CustomLabels />} />
+              <Route path="/keyword-optimization" element={<KeywordOptimization />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
 

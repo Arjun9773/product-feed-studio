@@ -11,16 +11,18 @@ import {
   ChevronLeft,
   Rss,
   Tag,
+  Key,FileJson 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard",          icon: LayoutDashboard, path: "/" },
-  { title: "Manage Feed Setup",  icon: Settings,        path: "/manage-feed-setup" },
+  { title: "Manage Feed Setup",  icon: FileJson ,        path: "/manage-feed-setup" },
   { title: "Feed Audit",         icon: ClipboardCheck,  path: "/feed-audit" },
   { title: "Field Optimization", icon: Sliders,         path: "/field-optimization" },
   { title: "Title Optimization", icon: Type,            path: "/title-optimization" },
   { title: "Custom Labels",      icon: Tag,             path: "/custom-labels" },
+  { title: "Keyword Optimization",  icon: Key,   path: "/keyword-optimization" },
   { title: "Google Category",    icon: FolderTree,      path: "/google-category" },
   { title: "Feed Product List",  icon: Package,         path: "/feed-products" },
   { title: "Output Feed",        icon: RssIcon,         path: "/output-feed" },
