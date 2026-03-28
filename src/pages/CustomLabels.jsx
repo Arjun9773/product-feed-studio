@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight, ChevronDown, Plus, Trash2,
   Pencil, Check, X, Tag, ImageOff,
-  Search, ArrowLeft, CheckSquare, Square, RefreshCw
+  Search, ArrowLeft, CheckSquare, Square, RefreshCw,Package,Tags,CheckCircle2,AlertCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -346,17 +346,52 @@ export default function CustomLabels() {
         </p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Products",    value: totalProducts, color: "text-blue-600"   },
-          { label: "Label Values",      value: totalValues,   color: "text-purple-600" },
-          { label: "Tagged Products",   value: taggedProducts, color: "text-green-600" },
-          { label: "Untagged Products", value: untagged,      color: "text-orange-600" },
-        ].map((c) => (
-          <div key={c.label} className="bg-card rounded-xl border border-border card-shadow p-4">
-            <p className="text-xs text-muted-foreground">{c.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${c.color}`}>{c.value}</p>
+          {
+            label: "Total Products",
+            value: totalProducts,
+            icon: Package,
+            color: "text-blue-600",
+            bg: "bg-blue-500/10",
+          },
+          {
+            label: "Label Values",
+            value: totalValues,
+            icon: Tags,
+            color: "text-purple-600",
+            bg: "bg-purple-500/10",
+          },
+          {
+            label: "Tagged Products",
+            value: taggedProducts,
+            icon: CheckCircle2,
+            color: "text-green-600",
+            bg: "bg-green-500/10",
+          },
+          {
+            label: "Untagged Products",
+            value: untagged,
+            icon: AlertCircle,
+            color: "text-orange-600",
+            bg: "bg-orange-500/10",
+          },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div
+            key={label}
+            className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}
+          >
+            <div className={`p-2 rounded-lg ${bg}`}>
+              <Icon className={`h-5 w-5 ${color}`} />
+            </div>
+
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${color}`}>
+                {value}
+              </p>
+            </div>
           </div>
         ))}
       </div>

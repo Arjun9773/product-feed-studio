@@ -98,15 +98,21 @@ const ISSUES = [
   { field: 'brand_in_title',   label: 'Brand not in title',  priority: 'high',   status: 'issue',   group: 'Core Attributes' },
   { field: 'google_category',  label: 'No Google Category',  priority: 'high',   status: 'missing', group: 'Categorisation'  },
   { field: 'brand',            label: 'No Brand',            priority: 'high',   status: 'missing', group: 'Core Attributes' },
+   { field: 'additional_image1',  label: 'No Additional Image1',  priority: 'high', status: 'missing', group: 'Images'         },
+  { field: 'additional_image2',  label: 'No Additional Image2',  priority: 'high', status: 'missing', group: 'Images'         },
+  { field: 'additional_image3',  label: 'No Additional Image3',  priority: 'high', status: 'missing', group: 'Images'         },
+  { field: 'additional_image4',  label: 'No Additional Image4',  priority: 'high', status: 'missing', group: 'Images'         },
+  { field: 'additional_image5',  label: 'No Additional Image5',  priority: 'high', status: 'missing', group: 'Images'         },
 
   // ── MEDIUM PRIORITY (4) ────────────────────────────────────
   { field: 'pattern',          label: 'No Pattern',          priority: 'medium', status: 'missing', group: 'Core Attributes' },
   { field: 'proper_casing',    label: 'Proper casing',       priority: 'medium', status: 'issue',   group: 'Core Attributes' },
   { field: 'description',      label: 'No Description',      priority: 'medium', status: 'missing', group: 'Content'         },
   { field: 'short_description',label: 'No Short Description',priority: 'medium', status: 'missing', group: 'Content'         },
+  { field: 'gtin',           label: 'No GTIN',             priority: 'medium',    status: 'missing', group: 'Identifiers'     },
 
   // ── LOW PRIORITY (1) ───────────────────────────────────────
-  { field: 'ean_id',           label: 'No GTIN',             priority: 'low',    status: 'missing', group: 'Identifiers'     },
+  { field: 'proper_casing',    label: 'Proper casing',       priority: 'low', status: 'issue',   group: 'Core Attributes' },
 
   // ── OTHERS PRIORITY (20) ───────────────────────────────────
   { field: 'url_key',            label: 'No Url Key',            priority: 'others', status: 'missing', group: 'Content'        },
@@ -121,11 +127,6 @@ const ISSUES = [
   { field: 'product_highlight3', label: 'No Product Highlight3', priority: 'others', status: 'missing', group: 'Highlights'     },
   { field: 'product_highlight4', label: 'No Product Highlight4', priority: 'others', status: 'missing', group: 'Highlights'     },
   { field: 'product_highlight5', label: 'No Product Highlight5', priority: 'others', status: 'missing', group: 'Highlights'     },
-  { field: 'additional_image1',  label: 'No Additional Image1',  priority: 'others', status: 'missing', group: 'Images'         },
-  { field: 'additional_image2',  label: 'No Additional Image2',  priority: 'others', status: 'missing', group: 'Images'         },
-  { field: 'additional_image3',  label: 'No Additional Image3',  priority: 'others', status: 'missing', group: 'Images'         },
-  { field: 'additional_image4',  label: 'No Additional Image4',  priority: 'others', status: 'missing', group: 'Images'         },
-  { field: 'additional_image5',  label: 'No Additional Image5',  priority: 'others', status: 'missing', group: 'Images'         },
   { field: 'additional_image6',  label: 'No Additional Image6',  priority: 'others', status: 'missing', group: 'Images'         },
   { field: 'additional_image7',  label: 'No Additional Image7',  priority: 'others', status: 'missing', group: 'Images'         },
   { field: 'additional_image8',  label: 'No Additional Image8',  priority: 'others', status: 'missing', group: 'Images'         },

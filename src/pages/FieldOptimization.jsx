@@ -159,6 +159,7 @@ export default function FieldOptimization() {
 
   // ── Dynamic fields from DB (via useAuditFields hook) ──────
   const { fields: ALL_FIELDS, loading: fieldsLoading } = useAuditFields();
+  
 
   // ── Group fields by group name ─────────────────────────────
    const FIELD_GROUPS = useMemo(() =>
@@ -446,6 +447,9 @@ const handleAiFill = async () => {
       </div>
     );
   }
+
+  const EXCLUDE_FIELDS = ['google_category', 'proper_casing'];
+
 
   // ── Render ─────────────────────────────────────────────────
   return (
