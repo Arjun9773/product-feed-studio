@@ -10,11 +10,42 @@ router.get("/", auth, tenantResolver, async (req, res) => {
       .collection("title_rules")
       .find({})
       .toArray();
-    res.json(rules);
+
+    const rulesWithCount = await Promise.all(
+      rules.map(async (rule) => {
+        const productsCount = await req.tenantDb
+          .collection("products")
+          .countDocuments({ category: rule.category });
+        return { ...rule, productsCount };
+      })
+    );
+
+    res.json(rulesWithCount);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
+
+// GET /api/products/preview-products?category=xyz — Preview products for a category title optimization
+router.get('/preview-products', auth, tenantResolver, async (req, res) => {
+  try {
+    const { category } = req.query;
+    if (!category) {
+      return res.status(400).json({ message: 'Category is required' });
+    }
+
+    const products = await req.tenantDb
+      .collection('products')
+      .find({ is_active: true, category: category })
+      .limit(5)
+      .toArray();
+
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+})
 
 router.post("/", auth, tenantResolver, async (req, res) => {
   try {

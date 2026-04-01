@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight, ChevronDown, Plus, Trash2,
   Pencil, Check, X, Tag, ImageOff,
-  Search, ArrowLeft, CheckSquare, Square, RefreshCw,Package,Tags,CheckCircle2,AlertCircle
+  Search, ArrowLeft, CheckSquare, Square,
+  RefreshCw, Package, Tags, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { mockProducts } from "@/data/mockData";
+import { useAuth } from "@/context/AuthContext";
 
-let nextId = 1;
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const LABEL_NAMES = [
   "Custom Label 0",
@@ -20,25 +21,49 @@ const LABEL_NAMES = [
   "Custom Label 4",
 ];
 
-// Each tree = array of 5 groups (one per label level)
-function initTree() {
-  return LABEL_NAMES.map((label, i) => ({
-    labelIndex: i,
-    label,
-    expanded: true,
-    values: [],
-  }));
+function initTree(id_name = null) {
+  return {
+    id_name,
+    groups: LABEL_NAMES.map((label, i) => ({
+      labelIndex: i,
+      label,
+      expanded: true,
+      values: [],
+    })),
+  };
 }
 
-// ─── Product Assignment View ────────────────────────────────────────────────
+function convertLabelsToTrees(labels) {
+  const groupMap = {};
 
-function ProductAssignView({ labelName, valueName, assignedIds, onSave, onBack }) {
+  labels.forEach((label) => {
+    if (!groupMap[label.id_name]) {
+      groupMap[label.id_name] = initTree(label.id_name);
+    }
+    const tree = groupMap[label.id_name];
+    const grp  = tree.groups[label.position];
+    grp.values.push({
+      id:         label._id,
+      name:       label.label_value,
+      productIds: [],
+    });
+  });
+
+  return Object.values(groupMap);
+}
+
+// ─── Product Assignment View ─────────────────────────────────────
+
+function ProductAssignView({
+  labelName, valueName, assignedIds,
+  onSave, onBack, products, loading
+}) {
   const [selected, setSelected] = useState(new Set(assignedIds));
   const [search, setSearch]     = useState("");
 
-  const filtered = mockProducts.filter((p) =>
-    p.feedName.toLowerCase().includes(search.toLowerCase()) ||
-    (p.brand && p.brand.toLowerCase().includes(search.toLowerCase()))
+  const filtered = products.filter((p) =>
+    p.product_name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.brand?.toLowerCase().includes(search.toLowerCase())
   );
 
   function toggle(id) {
@@ -53,12 +78,16 @@ function ProductAssignView({ labelName, valueName, assignedIds, onSave, onBack }
     setSelected(
       selected.size === filtered.length
         ? new Set()
-        : new Set(filtered.map((p) => p.id))
+        : new Set(filtered.map((p) => p._id))
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="space-y-5"
+    >
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" className="gap-2" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" /> Back
@@ -68,7 +97,9 @@ function ProductAssignView({ labelName, valueName, assignedIds, onSave, onBack }
           <p className="text-xs text-muted-foreground mt-0.5">
             <span className="font-medium text-foreground">{labelName}</span>
             {" → "}
-            <Badge className="bg-primary/10 text-primary border-0 text-xs">{valueName}</Badge>
+            <Badge className="bg-primary/10 text-primary border-0 text-xs">
+              {valueName}
+            </Badge>
           </p>
         </div>
       </div>
@@ -83,7 +114,11 @@ function ProductAssignView({ labelName, valueName, assignedIds, onSave, onBack }
             className="pl-9 bg-secondary border-0"
           />
         </div>
-        <Button variant="outline" size="sm" className="gap-2 shrink-0" onClick={toggleAll}>
+        <Button
+          variant="outline" size="sm"
+          className="gap-2 shrink-0"
+          onClick={toggleAll}
+        >
           {selected.size === filtered.length
             ? <><CheckSquare className="h-4 w-4" /> Deselect All</>
             : <><Square className="h-4 w-4" /> Select All</>}
@@ -94,58 +129,88 @@ function ProductAssignView({ labelName, valueName, assignedIds, onSave, onBack }
       </div>
 
       <div className="bg-card rounded-xl border border-border card-shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-secondary/50">
-              <th className="px-4 py-3 w-10" />
-              <th className="px-4 py-3 w-12 text-left text-xs font-medium text-muted-foreground">Image</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((product) => {
-              const isChecked = selected.has(product.id);
-              return (
-                <tr
-                  key={product.id}
-                  onClick={() => toggle(product.id)}
-                  className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
-                    isChecked ? "bg-primary/5" : "hover:bg-secondary/30"
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
-                      isChecked ? "bg-primary border-primary" : "border-muted-foreground/40"
-                    }`}>
-                      {isChecked && <Check className="h-2.5 w-2.5 text-white" />}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center">
-                      <ImageOff className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-foreground truncate max-w-[220px]">{product.feedName}</p>
-                    <p className="text-xs text-muted-foreground">{product.brand || "—"}</p>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {product.category.split(" > ").slice(-1)[0]}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
-                    ₹{product.price.toLocaleString()}
+        {loading ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            Loading products...
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-secondary/50">
+                <th className="px-4 py-3 w-10" />
+                <th className="px-4 py-3 w-12 text-left text-xs font-medium text-muted-foreground">Image</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((product) => {
+                const isChecked = selected.has(product._id);
+                return (
+                  <tr
+                    key={product._id}
+                    onClick={() => toggle(product._id)}
+                    className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
+                      isChecked ? "bg-primary/5" : "hover:bg-secondary/30"
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+                        isChecked
+                          ? "bg-primary border-primary"
+                          : "border-muted-foreground/40"
+                      }`}>
+                        {isChecked && <Check className="h-2.5 w-2.5 text-white" />}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center overflow-hidden">
+                        {product.additional_image1 ? (
+                          <img
+                            src={product.additional_image1}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <ImageOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-foreground truncate max-w-[220px]">
+                        {product.product_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {product.brand || "—"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {product.category?.split(" > ").slice(-1)[0] || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
+                      ₹{product.price?.toLocaleString() || "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    No products found
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="flex gap-3">
-        <Button className="bg-primary text-primary-foreground gap-2" onClick={() => onSave([...selected])}>
+        <Button
+          className="bg-primary text-primary-foreground gap-2"
+          onClick={() => onSave([...selected])}
+        >
           <Check className="h-4 w-4" />
           Save — {selected.size} product{selected.size !== 1 ? "s" : ""} assigned
         </Button>
@@ -155,119 +220,288 @@ function ProductAssignView({ labelName, valueName, assignedIds, onSave, onBack }
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────
+// ─── Main Page ───────────────────────────────────────────────────
 
 export default function CustomLabels() {
-  // trees = array of independent trees; each tree = 5 groups
-  const [trees, setTrees]               = useState([initTree()]);
-  const [currentTreeIdx, setCurrentTreeIdx] = useState(0);
-  const [nextLabelIdx, setNextLabelIdx] = useState(0);
-  const [inputText, setInputText]       = useState("");
-  const [renamingKey, setRenamingKey]   = useState(null); // "treeIdx-labelIndex-valueId"
-  const [renameText, setRenameText]     = useState("");
-  const [assigningValue, setAssigningValue] = useState(null); // { treeIdx, labelIndex, valueId }
+  const { currentStoreId, user } = useAuth();
+  const token = user?.token || localStorage.getItem("token");
 
-  // KPI
-  const totalProducts  = mockProducts.length;
-  const allValues      = trees.flatMap((t) => t.flatMap((g) => g.values));
+  const [trees, setTrees]                     = useState([initTree()]);
+  const [currentTreeIdx, setCurrentTreeIdx]   = useState(0);
+  const [nextLabelIdx, setNextLabelIdx]       = useState(0);
+  const [inputText, setInputText]             = useState("");
+  const [renamingKey, setRenamingKey]         = useState(null);
+  const [renameText, setRenameText]           = useState("");
+  const [assigningValue, setAssigningValue]   = useState(null);
+  const [products, setProducts]               = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [labelsLoading, setLabelsLoading]     = useState(true);
+
+  // ── API helper — component inside ──
+  async function apiFetch(url, options = {}) {
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${token}`,
+      "x-tenant-id":   currentStoreId,
+      ...(options.headers || {}),
+    },
+  });
+
+  const text = await res.text();
+  if (!text || !text.trim()) return null;
+
+  const result = JSON.parse(text);
+
+  if (!res.ok) {
+    throw new Error(result?.message || `API error ${res.status}`);
+  }
+
+  return result;
+}
+
+  // ── Page load ──
+  useEffect(() => {
+    if (!currentStoreId) return;
+    fetchLabels();
+    fetchProducts();
+  }, [currentStoreId]);
+
+  // ── Fetch labels from DB ──
+  async function fetchLabels() {
+    try {
+      setLabelsLoading(true);
+      const data = await apiFetch(
+        `/api/custom-labels?companyId=${currentStoreId}`
+      );
+
+      if (Array.isArray(data) && data.length > 0) {
+        const converted = convertLabelsToTrees(data);
+        setTrees(converted);
+
+        const lastTree    = converted[converted.length - 1];
+        const filledCount = lastTree.groups.filter(
+          (g) => g.values.length > 0
+        ).length;
+
+        if (filledCount === 5) {
+          setTrees((prev) => [...prev, initTree()]);
+          setCurrentTreeIdx(converted.length);
+          setNextLabelIdx(0);
+        } else {
+          setCurrentTreeIdx(converted.length - 1);
+          setNextLabelIdx(filledCount);
+        }
+      }
+    } catch (err) {
+      console.error("fetchLabels error", err);
+    } finally {
+      setLabelsLoading(false);
+    }
+  }
+
+  // ── Fetch products from DB ──
+  async function fetchProducts() {
+    try {
+      setProductsLoading(true);
+      const data = await apiFetch(
+        `/api/products?companyId=${currentStoreId}&limit=500`
+      );
+      setProducts(Array.isArray(data) ? data : data.products || []);
+    } catch (err) {
+      console.error("fetchProducts error", err);
+    } finally {
+      setProductsLoading(false);
+    }
+  }
+
+  // ── KPI ──
+  const allValues      = trees.flatMap((t) => t.groups.flatMap((g) => g.values));
   const totalValues    = allValues.length;
   const taggedIds      = new Set(allValues.flatMap((v) => v.productIds));
   const taggedProducts = taggedIds.size;
+  const totalProducts  = products.length;
   const untagged       = totalProducts - taggedProducts;
 
-  // ── helpers ──
-
+  // ── Toggle expand ──
   function toggleExpand(treeIdx, labelIndex) {
     setTrees((prev) =>
       prev.map((tree, ti) =>
-        ti !== treeIdx ? tree :
-        tree.map((g) => g.labelIndex === labelIndex ? { ...g, expanded: !g.expanded } : g)
+        ti !== treeIdx ? tree : {
+          ...tree,
+          groups: tree.groups.map((g) =>
+            g.labelIndex === labelIndex
+              ? { ...g, expanded: !g.expanded }
+              : g
+          ),
+        }
       )
     );
   }
 
-  function addValue() {
+  // ── Add value → API call ──
+  async function addValue() {
     const name = inputText.trim();
     if (!name) return;
 
-    // Add value to current tree at nextLabelIdx
-    setTrees((prev) =>
-      prev.map((tree, ti) =>
-        ti !== currentTreeIdx ? tree :
-        tree.map((g) =>
-          g.labelIndex === nextLabelIdx
-            ? { ...g, expanded: true, values: [...g.values, { id: nextId++, name, productIds: [] }] }
-            : g
-        )
-      )
-    );
+    try {
+      const currentIdName = nextLabelIdx === 0
+        ? null
+        : trees[currentTreeIdx]?.id_name || null;
 
-    // After CL4 → start a brand new tree
-    if (nextLabelIdx === 4) {
-      setTrees((prev) => [...prev, initTree()]);
-      setCurrentTreeIdx((prev) => prev + 1);
-      setNextLabelIdx(0);
-    } else {
-      setNextLabelIdx((prev) => prev + 1);
+      const result = await apiFetch("/api/custom-labels", {
+        method: "POST",
+        body: JSON.stringify({
+          label_value: name,
+          position:    nextLabelIdx,
+          ...(currentIdName ? { id_name: currentIdName } : {}),
+        }),
+      });
+
+      // Local state update
+      setTrees((prev) =>
+        prev.map((tree, ti) => {
+          if (ti !== currentTreeIdx) return tree;
+          return {
+            ...tree,
+            id_name: nextLabelIdx === 0
+              ? result.id_name
+              : tree.id_name,
+            groups: tree.groups.map((g) =>
+              g.labelIndex === nextLabelIdx
+                ? {
+                    ...g,
+                    expanded: true,
+                    values: [
+                      ...g.values,
+                      {
+                        id:         result.id,
+                        name,
+                        productIds: [],
+                      },
+                    ],
+                  }
+                : g
+            ),
+          };
+        })
+      );
+
+      if (nextLabelIdx === 4) {
+        setTrees((prev) => [...prev, initTree()]);
+        setCurrentTreeIdx((prev) => prev + 1);
+        setNextLabelIdx(0);
+      } else {
+        setNextLabelIdx((prev) => prev + 1);
+      }
+
+      setInputText("");
+    } catch (err) {
+      console.error("addValue error", err.message);
+  alert(err.message);
     }
-
-    setInputText("");
   }
 
-  function removeValue(treeIdx, labelIndex, valueId) {
-    setTrees((prev) =>
-      prev.map((tree, ti) =>
-        ti !== treeIdx ? tree :
-        tree.map((g) =>
-          g.labelIndex === labelIndex
-            ? { ...g, values: g.values.filter((v) => v.id !== valueId) }
-            : g
+  // ── Remove → API call ──
+  async function removeValue(treeIdx, labelIndex, valueId) {
+    try {
+      await apiFetch(`/api/custom-labels/${valueId}`, {
+        method: "DELETE",
+      });
+
+      setTrees((prev) =>
+        prev.map((tree, ti) =>
+          ti !== treeIdx ? tree : {
+            ...tree,
+            groups: tree.groups.map((g) =>
+              g.labelIndex === labelIndex
+                ? { ...g, values: g.values.filter((v) => v.id !== valueId) }
+                : g
+            ),
+          }
         )
-      )
-    );
+      );
+    } catch (err) {
+      console.error("removeValue error", err);
+    }
   }
 
+  // ── Rename ──
   function startRename(treeIdx, labelIndex, valueId, name) {
     setRenamingKey(`${treeIdx}-${labelIndex}-${valueId}`);
     setRenameText(name);
   }
 
-  function saveRename(treeIdx, labelIndex, valueId) {
+  async function saveRename(treeIdx, labelIndex, valueId) {
     const text = renameText.trim();
-    if (text) {
+    if (!text) { setRenamingKey(null); return; }
+
+    try {
+      await apiFetch(`/api/custom-labels/${valueId}`, {
+        method: "PUT",
+        body: JSON.stringify({ label_value: text }),
+      });
+
       setTrees((prev) =>
         prev.map((tree, ti) =>
-          ti !== treeIdx ? tree :
-          tree.map((g) =>
-            g.labelIndex === labelIndex
-              ? { ...g, values: g.values.map((v) => v.id === valueId ? { ...v, name: text } : v) }
-              : g
-          )
+          ti !== treeIdx ? tree : {
+            ...tree,
+            groups: tree.groups.map((g) =>
+              g.labelIndex === labelIndex
+                ? {
+                    ...g,
+                    values: g.values.map((v) =>
+                      v.id === valueId ? { ...v, name: text } : v
+                    ),
+                  }
+                : g
+            ),
+          }
         )
       );
+    } catch (err) {
+      console.error("saveRename error", err);
+    } finally {
+      setRenamingKey(null);
     }
-    setRenamingKey(null);
   }
 
-  function saveAssign(ids) {
+  // ── Product assign save ──
+  async function saveAssign(ids) {
     const { treeIdx, labelIndex, valueId } = assigningValue;
+
+    await apiFetch(`/api/custom-labels/${valueId}/prodcount`, {
+      method: "PUT",
+      body: JSON.stringify({ count: ids.length }),
+    });
+
     setTrees((prev) =>
       prev.map((tree, ti) =>
-        ti !== treeIdx ? tree :
-        tree.map((g) =>
-          g.labelIndex === labelIndex
-            ? { ...g, values: g.values.map((v) => v.id === valueId ? { ...v, productIds: ids } : v) }
-            : g
-        )
+        ti !== treeIdx ? tree : {
+          ...tree,
+          groups: tree.groups.map((g) =>
+            g.labelIndex === labelIndex
+              ? {
+                  ...g,
+                  values: g.values.map((v) =>
+                    v.id === valueId ? { ...v, productIds: ids } : v
+                  ),
+                }
+              : g
+          ),
+        }
       )
     );
     setAssigningValue(null);
   }
 
-  // ── product assign view ──
+  // ── Product assign view ──
   if (assigningValue) {
-    const grp = trees[assigningValue.treeIdx]?.[assigningValue.labelIndex];
-    const val = grp?.values.find((v) => v.id === assigningValue.valueId);
+    const tree = trees[assigningValue.treeIdx];
+    const grp  = tree?.groups[assigningValue.labelIndex];
+    const val  = grp?.values.find((v) => v.id === assigningValue.valueId);
+
     return (
       <div className="p-1">
         <ProductAssignView
@@ -276,19 +510,21 @@ export default function CustomLabels() {
           assignedIds={val?.productIds || []}
           onSave={saveAssign}
           onBack={() => setAssigningValue(null)}
+          products={products}
+          loading={productsLoading}
         />
       </div>
     );
   }
 
-  // ── render all trees ──
+  // ── Render all trees ──
   function renderAllTrees() {
     const rows = [];
+
     trees.forEach((tree, treeIdx) => {
-      const hasValues = tree.some((g) => g.values.length > 0);
+      const hasValues = tree.groups.some((g) => g.values.length > 0);
       if (!hasValues) return;
 
-      // Separator between trees
       if (treeIdx > 0 && rows.length > 0) {
         rows.push(
           <tr key={`sep-${treeIdx}`}>
@@ -299,7 +535,6 @@ export default function CustomLabels() {
         );
       }
 
-      // Tree number badge row
       rows.push(
         <tr key={`tree-header-${treeIdx}`} className="bg-secondary/10">
           <td colSpan={4} className="px-4 py-1.5">
@@ -310,13 +545,11 @@ export default function CustomLabels() {
         </tr>
       );
 
-      // Tree rows (rendered via renderLevel)
-      // We need to collect them as a fragment — use a wrapper component trick
       rows.push(
         <TreeRows
           key={`tree-${treeIdx}`}
           treeIdx={treeIdx}
-          tree={tree}
+          tree={tree.groups}
           renamingKey={renamingKey}
           renameText={renameText}
           onToggleExpand={toggleExpand}
@@ -331,6 +564,7 @@ export default function CustomLabels() {
         />
       );
     });
+
     return rows;
   }
 
@@ -346,7 +580,7 @@ export default function CustomLabels() {
         </p>
       </div>
 
-      {/* ── Stats ── */}
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
@@ -385,12 +619,9 @@ export default function CustomLabels() {
             <div className={`p-2 rounded-lg ${bg}`}>
               <Icon className={`h-5 w-5 ${color}`} />
             </div>
-
             <div>
               <p className="text-xs text-muted-foreground font-medium">{label}</p>
-              <p className={`text-2xl font-bold mt-0.5 ${color}`}>
-                {value}
-              </p>
+              <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
             </div>
           </div>
         ))}
@@ -419,7 +650,13 @@ export default function CustomLabels() {
           </thead>
           <tbody>
             <AnimatePresence initial={false}>
-              {totalValues === 0 ? (
+              {labelsLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                    Loading labels...
+                  </td>
+                </tr>
+              ) : totalValues === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     No label values yet. Type a value below and click "+ Add Custom Label Value".
@@ -437,9 +674,14 @@ export default function CustomLabels() {
           <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
             <Tag className="h-3.5 w-3.5" />
             <span>
-              Group <span className="font-semibold text-foreground">{currentTreeIdx + 1}</span>
+              Group{" "}
+              <span className="font-semibold text-foreground">
+                {currentTreeIdx + 1}
+              </span>
               {" · "}
-              <span className="font-semibold text-foreground">{nextLabelName}</span>
+              <span className="font-semibold text-foreground">
+                {nextLabelName}
+              </span>
             </span>
           </div>
           <Input
@@ -464,8 +706,7 @@ export default function CustomLabels() {
   );
 }
 
-// ─── TreeRows helper component ───────────────────────────────────────────────
-// Renders all rows for one tree (needed to use hooks-free rendering inside tbody)
+// ─── TreeRows ────────────────────────────────────────────────────
 
 function TreeRows({
   treeIdx, tree, renamingKey, renameText,
@@ -495,7 +736,10 @@ function TreeRows({
               className="border-b border-border hover:bg-secondary/20 transition-colors"
             >
               <td className="px-4 py-2.5">
-                <div className="flex items-center gap-1" style={{ paddingLeft: `${indent}px` }}>
+                <div
+                  className="flex items-center gap-1"
+                  style={{ paddingLeft: `${indent}px` }}
+                >
                   {!isLeaf ? (
                     <button
                       onClick={() => onToggleExpand(treeIdx, labelIndex)}
@@ -508,11 +752,15 @@ function TreeRows({
                   ) : (
                     <span className="inline-block w-5 shrink-0" />
                   )}
-                  <span className="text-sm font-medium text-foreground select-none">{group.label}</span>
+                  <span className="text-sm font-medium text-foreground select-none">
+                    {group.label}
+                  </span>
                 </div>
               </td>
 
-              <td className="px-4 py-2.5 text-sm text-muted-foreground">{v.productIds.length}</td>
+              <td className="px-4 py-2.5 text-sm text-muted-foreground">
+                {v.productIds.length}
+              </td>
 
               <td className="px-4 py-2.5">
                 {isRenaming ? (
@@ -527,10 +775,16 @@ function TreeRows({
                       }}
                       className="h-7 text-sm w-44 bg-secondary border-0"
                     />
-                    <button onClick={() => onSaveRename(treeIdx, labelIndex, v.id)} className="text-green-600 hover:text-green-700">
+                    <button
+                      onClick={() => onSaveRename(treeIdx, labelIndex, v.id)}
+                      className="text-green-600 hover:text-green-700"
+                    >
                       <Check className="h-4 w-4" />
                     </button>
-                    <button onClick={onCancelRename} className="text-muted-foreground hover:text-foreground">
+                    <button
+                      onClick={onCancelRename}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
                       <X className="h-4 w-4" />
                     </button>
                   </div>

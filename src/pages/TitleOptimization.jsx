@@ -54,43 +54,79 @@ function AddRuleForm({ onSave, onCancel, categories, editRule = null }) {
   const [selectedCat, setSelectedCat] = useState(editRule?.category || "");
   const [activeFields, setActiveFields] = useState(() => {
     if (editRule?.titleOptStructure) {
-      const dbFields = editRule.titleOptStructure
-        .split(",")
-        .map((f) => f.trim());
+      const dbFields = editRule.titleOptStructure.split(",").map((f) => f.trim());
       return dbFields
-        .map(
-          (dbField) =>
-            Object.entries(FIELD_DB_MAP).find(([, v]) => v === dbField)?.[0],
-        )
+        .map((dbField) => Object.entries(FIELD_DB_MAP).find(([, v]) => v === dbField)?.[0])
         .filter(Boolean);
     }
     return ["Product Name", "Brand"];
   });
   const [saving, setSaving] = useState(false);
+  const [previewProducts, setPreviewProducts] = useState([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
-  // Fields not yet added
   const availableToAdd = ALL_FIELDS.filter((f) => !activeFields.includes(f));
-
-  // Build comma-separated DB field string
-  const buildStructure = () =>
-    activeFields.map((f) => FIELD_DB_MAP[f]).join(",");
-
-  // Preview string
+  const buildStructure = () => activeFields.map((f) => FIELD_DB_MAP[f]).join(",");
   const previewStructure = activeFields.join(" + ");
 
+  const handlePreview = async () => {
+    if (!selectedCat) { toast.error("Please select a category first"); return; }
+    if (activeFields.length === 0) { toast.error("Add at least one field"); return; }
+
+    setPreviewLoading(true);
+    setShowPreview(true);
+
+    try {
+      const res = await API.get(`/title-rules/preview-products?category=${encodeURIComponent(selectedCat)}`);
+      const products = res.data.slice(0, 5);
+
+      const previewed = products.map((product) => {
+        let cleanName = product.product_name || "";
+        for (const field of activeFields) {
+          const dbField = FIELD_DB_MAP[field];
+          if (dbField === "product_name") continue;
+          const val = product[dbField];
+          if (val && cleanName.toLowerCase().includes(val.toLowerCase())) {
+            const escaped = val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            cleanName = cleanName
+              .replace(new RegExp(`\\(\\s*${escaped}\\s*\\)`, "gi"), "")
+              .replace(new RegExp(escaped, "gi"), "")
+              .trim();
+          }
+        }
+        cleanName = cleanName.replace(/\s+/g, " ").trim();
+
+        const parts = activeFields
+          .map((field) => {
+            const dbField = FIELD_DB_MAP[field];
+            if (dbField === "product_name") return cleanName;
+            const val = product[dbField] || "";
+            if (val && cleanName.toLowerCase().includes(val.toLowerCase())) return "";
+            return val;
+          })
+          .filter(Boolean);
+
+        return {
+          ean: product.ean_id || product._id,
+          original: product.product_name,
+          optimized: parts.join(" ").trim(),
+        };
+      });
+
+      setPreviewProducts(previewed);
+    } catch {
+      toast.error("Failed to load preview");
+      setPreviewProducts([]);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const handleSave = async () => {
-    if (!ruleName.trim()) {
-      toast.error("Rule name is required");
-      return;
-    }
-    if (!selectedCat) {
-      toast.error("Please select a category");
-      return;
-    }
-    if (activeFields.length === 0) {
-      toast.error("Add at least one field");
-      return;
-    }
+    if (!ruleName.trim()) { toast.error("Rule name is required"); return; }
+    if (!selectedCat) { toast.error("Please select a category"); return; }
+    if (activeFields.length === 0) { toast.error("Add at least one field"); return; }
 
     setSaving(true);
     try {
@@ -100,7 +136,6 @@ function AddRuleForm({ onSave, onCancel, categories, editRule = null }) {
         category: selectedCat,
         status: "not started",
       };
-
       if (editRule) {
         await API.put(`/title-rules/${editRule._id}`, payload);
         toast.success("Rule updated!");
@@ -117,136 +152,204 @@ function AddRuleForm({ onSave, onCancel, categories, editRule = null }) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      className="bg-card rounded-xl p-6 border border-border space-y-5"
-    >
-      <h3 className="font-semibold text-foreground">
-        {editRule ? "Edit Rule" : "New Title Optimization Rule"}
-      </h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onCancel}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">
-            Rule Name *
-          </label>
-          <Input
-            placeholder="e.g., Television Rule"
-            value={ruleName}
-            onChange={(e) => setRuleName(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">
-            Product Category *
-          </label>
-          <select
-            className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-            value={selectedCat}
-            onChange={(e) => setSelectedCat(e.target.value)}
+      {/* Modal */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="relative bg-card border border-border rounded-2xl shadow-2xl z-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
+          <h3 className="font-semibold text-lg text-foreground">
+            {editRule ? "Edit Rule" : "New Title Optimization Rule"}
+          </h3>
+          <button
+            onClick={onCancel}
+            className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           >
-            <option value="">Select category...</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Title Structure Builder */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-foreground">
-          Product Name Optimization Order
-        </label>
-
-        {/* Draggable active fields */}
-        <div className="bg-secondary/40 rounded-xl p-4 border border-border min-h-[60px]">
-          {activeFields.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">
-              Add fields below to build title structure
-            </p>
-          ) : (
-            <Reorder.Group
-              axis="x"
-              values={activeFields}
-              onReorder={setActiveFields}
-              className="flex flex-wrap gap-2"
-            >
-              {activeFields.map((field) => (
-                <Reorder.Item key={field} value={field}>
-                  <motion.div
-                    layout
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-secondary border border-border cursor-grab active:cursor-grabbing hover:border-primary/40 transition-colors select-none"
-                  >
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    {field}
-                    <button
-                      onClick={() =>
-                        setActiveFields((prev) =>
-                          prev.filter((f) => f !== field),
-                        )
-                      }
-                      className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </motion.div>
-                </Reorder.Item>
-              ))}
-            </Reorder.Group>
-          )}
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Available fields to add */}
-        {availableToAdd.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground font-medium">
-              Add fields:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {availableToAdd.map((field) => (
-                <button
-                  key={field}
-                  onClick={() => setActiveFields((prev) => [...prev, field])}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {field}
-                </button>
-              ))}
+        {/* Modal Body */}
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">Rule Name *</label>
+              <Input
+                placeholder="e.g., Television Rule"
+                value={ruleName}
+                onChange={(e) => setRuleName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">Product Category *</label>
+              <select
+                className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                value={selectedCat}
+                onChange={(e) => {
+                  setSelectedCat(e.target.value);
+                  setShowPreview(false);
+                  setPreviewProducts([]);
+                }}
+              >
+                <option value="">Select category...</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
           </div>
-        )}
 
-        {/* Preview */}
-        {activeFields.length > 0 && (
-          <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5">
-            <p className="text-xs text-muted-foreground mb-1">
-              Title preview structure:
-            </p>
-            <p className="text-sm font-mono text-primary">{previewStructure}</p>
+          {/* Title Structure Builder */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground">
+              Product Name Optimization Order
+            </label>
+
+            <div className="bg-secondary/40 rounded-xl p-4 border border-border min-h-[60px]">
+              {activeFields.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Add fields below to build title structure
+                </p>
+              ) : (
+                <Reorder.Group
+                  axis="x"
+                  values={activeFields}
+                  onReorder={setActiveFields}
+                  className="flex flex-wrap gap-2"
+                >
+                  {activeFields.map((field) => (
+                    <Reorder.Item key={field} value={field}>
+                      <motion.div
+                        layout
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-secondary border border-border cursor-grab active:cursor-grabbing hover:border-primary/40 transition-colors select-none"
+                      >
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        {field}
+                        <button
+                          onClick={() => setActiveFields((prev) => prev.filter((f) => f !== field))}
+                          className="ml-1 h-4 w-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </motion.div>
+                    </Reorder.Item>
+                  ))}
+                </Reorder.Group>
+              )}
+            </div>
+
+            {availableToAdd.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground font-medium">Add fields:</p>
+                <div className="flex flex-wrap gap-2">
+                  {availableToAdd.map((field) => (
+                    <button
+                      key={field}
+                      onClick={() => setActiveFields((prev) => [...prev, field])}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {field}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeFields.length > 0 && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5">
+                <p className="text-xs text-muted-foreground mb-1">Title preview structure:</p>
+                <p className="text-sm font-mono text-primary">{previewStructure}</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="flex gap-3 pt-2">
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4" />
+          {/* Buttons */}
+          <div className="flex gap-3">
+            <Button onClick={handleSave} disabled={saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              {saving ? "Saving..." : editRule ? "Update Rule" : "Save Rule"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreview}
+              disabled={previewLoading}
+              className="gap-2"
+            >
+              {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              {previewLoading ? "Loading..." : "Live Preview"}
+            </Button>
+            <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          </div>
+
+          {/* Live Preview Table */}
+          {showPreview && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
+                <label className="text-sm font-medium text-foreground">Live Preview</label>
+                {previewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              </div>
+
+              <div className="rounded-xl border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-secondary/50 border-b border-border">
+                      <th className="p-3 text-left text-xs font-semibold text-muted-foreground uppercase w-[160px]">
+                        Product ID
+                      </th>
+                      <th className="p-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        Original Name
+                      </th>
+                      <th className="p-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                        Optimized Name
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewLoading ? (
+                      <tr>
+                        <td colSpan={3} className="p-6 text-center text-muted-foreground text-xs">
+                          Loading preview...
+                        </td>
+                      </tr>
+                    ) : previewProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="p-6 text-center text-muted-foreground text-xs">
+                          No products found in "{selectedCat}"
+                        </td>
+                      </tr>
+                    ) : (
+                      previewProducts.map((p, i) => (
+                        <tr key={i} className="border-b border-border last:border-0 hover:bg-secondary/20">
+                          <td className="p-3 font-mono text-xs text-muted-foreground">{p.ean}</td>
+                          <td className="p-3 text-foreground">{p.original}</td>
+                          <td className="p-3 font-medium text-primary">{p.optimized}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Showing first 5 products from "{selectedCat}"
+              </p>
+            </div>
           )}
-          {saving ? "Saving..." : editRule ? "Update Rule" : "Save Rule"}
-        </Button>
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </motion.div>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
