@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
+import ProductAssignView from "./ProductAssignView";
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -45,7 +46,7 @@ function convertLabelsToTrees(labels) {
     grp.values.push({
       id:         label._id,
       name:       label.label_value,
-      productIds: [],
+      productIds: new Array(label.prodcount || 0).fill(null),
     });
   });
 
@@ -54,171 +55,171 @@ function convertLabelsToTrees(labels) {
 
 // ─── Product Assignment View ─────────────────────────────────────
 
-function ProductAssignView({
-  labelName, valueName, assignedIds,
-  onSave, onBack, products, loading
-}) {
-  const [selected, setSelected] = useState(new Set(assignedIds));
-  const [search, setSearch]     = useState("");
+// function ProductAssignView({
+//   labelName, valueName, assignedIds,
+//   onSave, onBack, products, loading
+// }) {
+//   const [selected, setSelected] = useState(new Set(assignedIds));
+//   const [search, setSearch]     = useState("");
 
-  const filtered = products.filter((p) =>
-    p.product_name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.brand?.toLowerCase().includes(search.toLowerCase())
-  );
+//   const filtered = products.filter((p) =>
+//     p.product_name?.toLowerCase().includes(search.toLowerCase()) ||
+//     p.brand?.toLowerCase().includes(search.toLowerCase())
+//   );
 
-  function toggle(id) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
+//   function toggle(id) {
+//     setSelected((prev) => {
+//       const next = new Set(prev);
+//       next.has(id) ? next.delete(id) : next.add(id);
+//       return next;
+//     });
+//   }
 
-  function toggleAll() {
-    setSelected(
-      selected.size === filtered.length
-        ? new Set()
-        : new Set(filtered.map((p) => p._id))
-    );
-  }
+//   function toggleAll() {
+//     setSelected(
+//       selected.size === filtered.length
+//         ? new Set()
+//         : new Set(filtered.map((p) => p._id))
+//     );
+//   }
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="space-y-5"
-    >
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" className="gap-2" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" /> Back
-        </Button>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Assign Products</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            <span className="font-medium text-foreground">{labelName}</span>
-            {" → "}
-            <Badge className="bg-primary/10 text-primary border-0 text-xs">
-              {valueName}
-            </Badge>
-          </p>
-        </div>
-      </div>
+//   return (
+//     <motion.div
+//       initial={{ opacity: 0, x: 20 }}
+//       animate={{ opacity: 1, x: 0 }}
+//       className="space-y-5"
+//     >
+//       <div className="flex items-center gap-3">
+//         <Button variant="outline" size="sm" className="gap-2" onClick={onBack}>
+//           <ArrowLeft className="h-4 w-4" /> Back
+//         </Button>
+//         <div>
+//           <h1 className="text-xl font-bold text-foreground">Assign Products</h1>
+//           <p className="text-xs text-muted-foreground mt-0.5">
+//             <span className="font-medium text-foreground">{labelName}</span>
+//             {" → "}
+//             <Badge className="bg-primary/10 text-primary border-0 text-xs">
+//               {valueName}
+//             </Badge>
+//           </p>
+//         </div>
+//       </div>
 
-      <div className="bg-card rounded-xl p-4 border border-border card-shadow flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-secondary border-0"
-          />
-        </div>
-        <Button
-          variant="outline" size="sm"
-          className="gap-2 shrink-0"
-          onClick={toggleAll}
-        >
-          {selected.size === filtered.length
-            ? <><CheckSquare className="h-4 w-4" /> Deselect All</>
-            : <><Square className="h-4 w-4" /> Select All</>}
-        </Button>
-        <Badge className="bg-primary/10 text-primary border-0 shrink-0">
-          {selected.size} selected
-        </Badge>
-      </div>
+//       <div className="bg-card rounded-xl p-4 border border-border card-shadow flex items-center gap-3">
+//         <div className="relative flex-1">
+//           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+//           <Input
+//             placeholder="Search products..."
+//             value={search}
+//             onChange={(e) => setSearch(e.target.value)}
+//             className="pl-9 bg-secondary border-0"
+//           />
+//         </div>
+//         <Button
+//           variant="outline" size="sm"
+//           className="gap-2 shrink-0"
+//           onClick={toggleAll}
+//         >
+//           {selected.size === filtered.length
+//             ? <><CheckSquare className="h-4 w-4" /> Deselect All</>
+//             : <><Square className="h-4 w-4" /> Select All</>}
+//         </Button>
+//         <Badge className="bg-primary/10 text-primary border-0 shrink-0">
+//           {selected.size} selected
+//         </Badge>
+//       </div>
 
-      <div className="bg-card rounded-xl border border-border card-shadow overflow-hidden">
-        {loading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Loading products...
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-secondary/50">
-                <th className="px-4 py-3 w-10" />
-                <th className="px-4 py-3 w-12 text-left text-xs font-medium text-muted-foreground">Image</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((product) => {
-                const isChecked = selected.has(product._id);
-                return (
-                  <tr
-                    key={product._id}
-                    onClick={() => toggle(product._id)}
-                    className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
-                      isChecked ? "bg-primary/5" : "hover:bg-secondary/30"
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
-                        isChecked
-                          ? "bg-primary border-primary"
-                          : "border-muted-foreground/40"
-                      }`}>
-                        {isChecked && <Check className="h-2.5 w-2.5 text-white" />}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center overflow-hidden">
-                        {product.additional_image1 ? (
-                          <img
-                            src={product.additional_image1}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <ImageOff className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-foreground truncate max-w-[220px]">
-                        {product.product_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {product.brand || "—"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {product.category?.split(" > ").slice(-1)[0] || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
-                      ₹{product.price?.toLocaleString() || "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    No products found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+//       <div className="bg-card rounded-xl border border-border card-shadow overflow-hidden">
+//         {loading ? (
+//           <div className="py-12 text-center text-sm text-muted-foreground">
+//             Loading products...
+//           </div>
+//         ) : (
+//           <table className="w-full text-sm">
+//             <thead>
+//               <tr className="border-b border-border bg-secondary/50">
+//                 <th className="px-4 py-3 w-10" />
+//                 <th className="px-4 py-3 w-12 text-left text-xs font-medium text-muted-foreground">Image</th>
+//                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
+//                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
+//                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
+//               </tr>
+//             </thead>
+//             <tbody>
+//               {filtered.map((product) => {
+//                 const isChecked = selected.has(product._id);
+//                 return (
+//                   <tr
+//                     key={product._id}
+//                     onClick={() => toggle(product._id)}
+//                     className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
+//                       isChecked ? "bg-primary/5" : "hover:bg-secondary/30"
+//                     }`}
+//                   >
+//                     <td className="px-4 py-3">
+//                       <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+//                         isChecked
+//                           ? "bg-primary border-primary"
+//                           : "border-muted-foreground/40"
+//                       }`}>
+//                         {isChecked && <Check className="h-2.5 w-2.5 text-white" />}
+//                       </div>
+//                     </td>
+//                     <td className="px-4 py-3">
+//                       <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center overflow-hidden">
+//                         {product.additional_image1 ? (
+//                           <img
+//                             src={product.additional_image1}
+//                             alt=""
+//                             className="h-full w-full object-cover"
+//                           />
+//                         ) : (
+//                           <ImageOff className="h-4 w-4 text-muted-foreground" />
+//                         )}
+//                       </div>
+//                     </td>
+//                     <td className="px-4 py-3">
+//                       <p className="font-medium text-foreground truncate max-w-[220px]">
+//                         {product.product_name}
+//                       </p>
+//                       <p className="text-xs text-muted-foreground">
+//                         {product.brand || "—"}
+//                       </p>
+//                     </td>
+//                     <td className="px-4 py-3 text-xs text-muted-foreground">
+//                       {product.category?.split(" > ").slice(-1)[0] || "—"}
+//                     </td>
+//                     <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
+//                       ₹{product.price?.toLocaleString() || "—"}
+//                     </td>
+//                   </tr>
+//                 );
+//               })}
+//               {filtered.length === 0 && (
+//                 <tr>
+//                   <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+//                     No products found
+//                   </td>
+//                 </tr>
+//               )}
+//             </tbody>
+//           </table>
+//         )}
+//       </div>
 
-      <div className="flex gap-3">
-        <Button
-          className="bg-primary text-primary-foreground gap-2"
-          onClick={() => onSave([...selected])}
-        >
-          <Check className="h-4 w-4" />
-          Save — {selected.size} product{selected.size !== 1 ? "s" : ""} assigned
-        </Button>
-        <Button variant="outline" onClick={onBack}>Cancel</Button>
-      </div>
-    </motion.div>
-  );
-}
+//       <div className="flex gap-3">
+//         <Button
+//           className="bg-primary text-primary-foreground gap-2"
+//           onClick={() => onSave([...selected])}
+//         >
+//           <Check className="h-4 w-4" />
+//           Save — {selected.size} product{selected.size !== 1 ? "s" : ""} assigned
+//         </Button>
+//         <Button variant="outline" onClick={onBack}>Cancel</Button>
+//       </div>
+//     </motion.div>
+//   );
+// }
 
 // ─── Main Page ───────────────────────────────────────────────────
 
@@ -406,22 +407,39 @@ export default function CustomLabels() {
   // ── Remove → API call ──
   async function removeValue(treeIdx, labelIndex, valueId) {
     try {
-      await apiFetch(`/api/custom-labels/${valueId}`, {
+      const res = await apiFetch(`/api/custom-labels/${valueId}`, {
         method: "DELETE",
       });
 
-      setTrees((prev) =>
-        prev.map((tree, ti) =>
-          ti !== treeIdx ? tree : {
-            ...tree,
-            groups: tree.groups.map((g) =>
-              g.labelIndex === labelIndex
-                ? { ...g, values: g.values.filter((v) => v.id !== valueId) }
-                : g
-            ),
-          }
-        )
-      );
+      if (res.deleteGroup) {
+        // ✅ position 0 → whole group remove
+        setTrees((prev) => {
+          const updated = prev.filter((_, ti) => ti !== treeIdx);
+          return updated.length === 0 ? [initTree()] : [...updated, initTree()];
+        });
+        setCurrentTreeIdx((prev) => Math.max(0, prev - 1));
+        setNextLabelIdx(0);
+
+      } else {
+        // ✅ position 1-4 → clear from deleted position onwards
+        setTrees((prev) =>
+          prev.map((tree, ti) =>
+            ti !== treeIdx ? tree : {
+              ...tree,
+              groups: tree.groups.map((g) =>
+                g.labelIndex >= res.deletedFromPosition
+                  ? { ...g, values: [] }
+                  : g
+              ),
+            }
+          )
+        );
+
+        // ✅ Input bar reset — deleted position-லிருந்து மீண்டும் type பண்ணலாம்
+        setCurrentTreeIdx(treeIdx);
+        setNextLabelIdx(res.deletedFromPosition);
+      }
+
     } catch (err) {
       console.error("removeValue error", err);
     }
@@ -471,20 +489,40 @@ export default function CustomLabels() {
   async function saveAssign(ids) {
     const { treeIdx, labelIndex, valueId } = assigningValue;
 
+    // ✅ அந்த label-ஓட value name எடு
+    const tree  = trees[treeIdx];
+    const grp   = tree.groups[labelIndex];
+    const val   = grp.values.find(v => v.id === valueId);
+    const field = `custom_label_${labelIndex}`; // "custom_label_0"
+
+    // ✅ Products-ல் custom_label_X update பண்ணு
+    await apiFetch("/api/products/bulk-update", {
+      method: "PUT",
+      body: JSON.stringify({
+        field,
+        updates: ids.map(id => ({
+          id: products.find(p => p._id === id)?.sourceId, // sourceId use பண்ணு
+          value: val.name,
+        })),
+      }),
+    });
+
+    // ✅ prodcount update
     await apiFetch(`/api/custom-labels/${valueId}/prodcount`, {
       method: "PUT",
       body: JSON.stringify({ count: ids.length }),
     });
 
-    setTrees((prev) =>
+    // ✅ Local state update
+    setTrees(prev =>
       prev.map((tree, ti) =>
         ti !== treeIdx ? tree : {
           ...tree,
-          groups: tree.groups.map((g) =>
+          groups: tree.groups.map(g =>
             g.labelIndex === labelIndex
               ? {
                   ...g,
-                  values: g.values.map((v) =>
+                  values: g.values.map(v =>
                     v.id === valueId ? { ...v, productIds: ids } : v
                   ),
                 }
@@ -493,6 +531,7 @@ export default function CustomLabels() {
         }
       )
     );
+
     setAssigningValue(null);
   }
 

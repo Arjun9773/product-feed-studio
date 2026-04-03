@@ -26,9 +26,9 @@ function getLabelName(position) {
 
 router.get('/', auth, tenantResolver, async (req, res) => {
   try {
-    const { feedId } = req.query;
+    // const { feedId } = req.query;
     const filter = { archived: 0 };
-    if (feedId) filter.feedId = feedId;
+    // if (feedId) filter.feedId = feedId;
 
     const labels = await req.tenantDb
       .collection('custom_labels')
@@ -49,7 +49,7 @@ router.get('/', auth, tenantResolver, async (req, res) => {
 
 router.post('/', auth, tenantResolver, async (req, res) => {
   try {
-    const { feedId, label_value, position, id_name } = req.body;
+    const { label_value, position, id_name } = req.body;
 
     // validate
     // if (!feedId)      return res.status(400).json({ message: 'feedId required' });
@@ -69,24 +69,25 @@ router.post('/', auth, tenantResolver, async (req, res) => {
       return res.status(400).json({ message: 'id_name required for position 1–4' });
     }
 
-    // position + tenantId combination already exists-ஆ check பண்ணு
-    // const existing = await req.tenantDb
-    //   .collection('custom_labels')
-    //   .findOne({ 
-    //     tenantId, 
-    //     position, 
-    //     id_name: groupIdName,
-    //     archived: 0 
-    //   });
+    // ✅ NEW CHECK — same label_value already exists-ஆ?
+    const duplicateValue = await req.tenantDb
+      .collection('custom_labels')
+      .findOne({ 
+        tenantId,
+        label_value: label_value.trim(),
+        archived: 0 
+      });
 
-    // if (existing) {
-    //   return res.status(409).json({ message: 'Label already exists for this position' });
-    // }
+    if (duplicateValue) {
+      return res.status(409).json({ 
+        message: `"${label_value}" already exists. Please use a different name.` 
+      });
+    }
 
 
     const doc = {
       tenantId,
-      feedId,
+      // feedId,
       data_field:   getDataField(position),   // "custom_label_0"
       label:        getLabelName(position),    // "Custom Label 0"
       label_value,                             // "summer_sale"
@@ -148,15 +149,52 @@ router.put('/:id', auth, tenantResolver, async (req, res) => {
 
 router.delete('/:id', auth, tenantResolver, async (req, res) => {
   try {
-    // hard delete பண்றதை விட archive பண்றது better
+    const label = await req.tenantDb
+      .collection('custom_labels')
+      .findOne({ _id: new ObjectId(req.params.id) });
+
+    if (!label) {
+      return res.status(404).json({ message: 'Label not found' });
+    }
+
+    // ✅ Delete ஆகும் positions find பண்ணு
+    const fromPosition = label.position;
+
+    // ✅ Custom labels archive
     await req.tenantDb
       .collection('custom_labels')
-      .updateOne(
-        { _id: new ObjectId(req.params.id) },
+      .updateMany(
+        {
+          tenantId: label.tenantId,
+          id_name:  label.id_name,
+          position: { $gte: fromPosition },
+          archived: 0,
+        },
         { $set: { archived: 1, archivedAt: new Date() } }
       );
 
-    res.json({ message: 'Label archived' });
+    // ✅ Delete ஆன positions-க்கான field names
+    const fieldsToDelete = [];
+    for (let i = fromPosition; i <= 4; i++) {
+      fieldsToDelete.push(`custom_label_${i}`);
+    }
+
+    // ✅ Products-ல் அந்த fields clear பண்ணு
+    const unsetObj = {};
+    fieldsToDelete.forEach(f => { unsetObj[f] = ""; });
+
+    await req.tenantDb
+      .collection('products')
+      .updateMany(
+        { tenantId: label.tenantId },
+        { $set: unsetObj }
+      );
+
+    res.json({
+      message:             'Deleted',
+      deleteGroup:         label.position === 0,
+      deletedFromPosition: label.position,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
