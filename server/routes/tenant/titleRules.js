@@ -13,9 +13,11 @@ router.get("/", auth, tenantResolver, async (req, res) => {
 
     const rulesWithCount = await Promise.all(
       rules.map(async (rule) => {
+        // ← "all" ஆனா எல்லா products-உம் count பண்ணு
+        const categoryFilter = rule.category === 'all' ? {} : { category: rule.category };
         const productsCount = await req.tenantDb
           .collection("products")
-          .countDocuments({ category: rule.category });
+          .countDocuments({ is_active: true, ...categoryFilter });
         return { ...rule, productsCount };
       })
     );
@@ -26,8 +28,6 @@ router.get("/", auth, tenantResolver, async (req, res) => {
   }
 });
 
-
-// GET /api/products/preview-products?category=xyz — Preview products for a category title optimization
 router.get('/preview-products', auth, tenantResolver, async (req, res) => {
   try {
     const { category } = req.query;
@@ -35,9 +35,11 @@ router.get('/preview-products', auth, tenantResolver, async (req, res) => {
       return res.status(400).json({ message: 'Category is required' });
     }
 
+    const categoryFilter = category === 'all' ? {} : { category };
+
     const products = await req.tenantDb
       .collection('products')
-      .find({ is_active: true, category: category })
+      .find({ is_active: true, ...categoryFilter })
       .limit(5)
       .toArray();
 
@@ -45,7 +47,7 @@ router.get('/preview-products', auth, tenantResolver, async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
-})
+});
 
 router.post("/", auth, tenantResolver, async (req, res) => {
   try {
@@ -95,9 +97,12 @@ router.post("/:id/run", auth, tenantResolver, async (req, res) => {
 
     const structure = rule.titleOptStructure.split(",").map((f) => f.trim());
 
+    // ← "all" ஆனா எல்லா products-உம் எடு
+    const categoryFilter = rule.category === 'all' ? {} : { category: rule.category };
+
     const products = await req.tenantDb
       .collection("products")
-      .find({ category: rule.category })
+      .find({ is_active: true, ...categoryFilter })
       .toArray();
 
     if (products.length === 0) {
@@ -117,24 +122,20 @@ router.post("/:id/run", auth, tenantResolver, async (req, res) => {
         const val = product[field];
         if (val && cleanName.toLowerCase().includes(val.toLowerCase())) {
           const escaped = val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
           cleanName = cleanName
             .replace(new RegExp(`\\(\\s*${escaped}\\s*\\)`, "gi"), "")
             .trim();
-
-          //
           cleanName = cleanName.replace(new RegExp(escaped, "gi"), "").trim();
         }
       }
 
-      // Cleanup
       cleanName = cleanName
-        .replace(/\(\s*\)/g, "") // empty ()
-        .replace(/\[\s*\]/g, "") // empty []
-        .replace(/\(\s*,?\s*\)/g, "") // (,) or ( , )
-        .replace(/,\s*\)/g, ")") // "MS2043DB, )" → "MS2043DB)"
-        .replace(/\(\s*,/g, "(") // "(, Black)" → "(Black)"
-        .replace(/[-–]\s*[A-Z0-9]{4,}/g, "") // SKU pattern
+        .replace(/\(\s*\)/g, "")
+        .replace(/\[\s*\]/g, "")
+        .replace(/\(\s*,?\s*\)/g, "")
+        .replace(/,\s*\)/g, ")")
+        .replace(/\(\s*,/g, "(")
+        .replace(/[-–]\s*[A-Z0-9]{4,}/g, "")
         .replace(/\s+/g, " ")
         .trim();
 
@@ -142,8 +143,7 @@ router.post("/:id/run", auth, tenantResolver, async (req, res) => {
         .map((field) => {
           if (field === "product_name") return cleanName;
           const val = product[field] || "";
-          if (val && cleanName.toLowerCase().includes(val.toLowerCase()))
-            return "";
+          if (val && cleanName.toLowerCase().includes(val.toLowerCase())) return "";
           return val;
         })
         .filter(Boolean);

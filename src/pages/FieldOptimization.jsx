@@ -24,6 +24,7 @@ const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
 // ============================================================
 function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onClear, onInputChange }) {
   const isFilled  = state?.value !== "" && state?.value != null;
+  const isUnverified = state?.status === 'unverified' && !isFilled;
   const isEditing = state?.editing;
   const isDesc    = selectedField?.field === "description";
 
@@ -58,6 +59,23 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">{product.brand || "—"}</p>
       </td>
+
+      {/* Product URL */}
+      <td className="px-4 py-3 text-xs max-w-[160px]">
+        {product.product_url ? (
+          <a
+            href={product.product_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline truncate block"
+          >
+            View Product ↗
+          </a>
+        ) : (
+          <span className="text-muted-foreground italic">No URL</span>
+        )}
+      </td>
+
 
       {/* Category */}
       <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px]">
@@ -135,11 +153,31 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
       </td>
 
       {/* Status Badge */}
+      {/* <td className="px-4 py-3">
+        {isFilled ? (
+          <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
+            <Check className="h-2.5 w-2.5" />Filled
+          </Badge>
+        ) : (
+          <Badge className="bg-secondary text-muted-foreground border-0 text-[10px]">
+            Empty
+          </Badge>
+        )}
+      </td> */}
+      {/* Status Badge */}
       <td className="px-4 py-3">
         {isFilled ? (
           <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
             <Check className="h-2.5 w-2.5" />Filled
           </Badge>
+        ) : isUnverified ? (
+          <button
+            onClick={onSelect}
+            className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
+          >
+            <AlertCircle className="h-2.5 w-2.5" />
+            Unverified
+          </button>
         ) : (
           <Badge className="bg-secondary text-muted-foreground border-0 text-[10px]">
             Empty
@@ -353,40 +391,84 @@ export default function FieldOptimization() {
 //       setAiLoading(false);
 //     }
 //   };
-const handleAiFill = async () => {
-  if (!selectedField) return;
-  setAiLoading(true);
-  try {
-    const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
-    if (unfilled.length === 0) {
-      toast.info("All products already filled!");
-      return;
-    }
 
-    const res = await API.post('/ai/fill-field', {
-      products:   unfilled,
-      fieldLabel: selectedField.label,
-    });
 
-    const updates = res.data?.data ?? [];
+// const handleAiFill = async () => {
+//   if (!selectedField) return;
+//   setAiLoading(true);
+//   try {
+//     const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
+//     if (unfilled.length === 0) {
+//       toast.info("All products already filled!");
+//       return;
+//     }
 
-    setProductStates(prev => {
-      const next = { ...prev };
-      updates.forEach(({ id, value }) => {
-        if (value && next[id]) {
-          next[id] = { ...next[id], value, editing: false, inputVal: '' };
-        }
+//     const res = await API.post('/ai/fill-field', {
+//       products:   unfilled,
+//       fieldLabel: selectedField.label,
+//     });
+
+//     const updates = res.data?.data ?? [];
+
+//     setProductStates(prev => {
+//       const next = { ...prev };
+//       updates.forEach(({ id, value }) => {
+//         if (value && next[id]) {
+//           next[id] = { ...next[id], value, editing: false, inputVal: '' };
+//         }
+//       });
+//       return next;
+//     });
+
+//     toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
+//   } catch {
+//     toast.error('AI fill failed');
+//   } finally {
+//     setAiLoading(false);
+//   }
+// };
+
+  const handleAiFill = async () => {
+    if (!selectedField) return;
+    setAiLoading(true);
+    try {
+      const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
+      if (unfilled.length === 0) {
+        toast.info("All products already filled!");
+        return;
+      }
+
+      const res = await API.post('/ai/fill-field', {
+        products:   unfilled,
+        fieldLabel: selectedField.label,
       });
-      return next;
-    });
 
-    toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
-  } catch {
-    toast.error('AI fill failed');
-  } finally {
-    setAiLoading(false);
-  }
-};
+      const updates = res.data?.data ?? [];
+
+      let filledCount  = 0;
+      let unverifiedCount = 0;
+
+      setProductStates(prev => {
+        const next = { ...prev };
+        updates.forEach(({ id, value, status }) => {
+          if (next[id]) {
+            next[id] = { ...next[id], value, editing: false, inputVal: '', status };
+            if (status === 'filled')      filledCount++;
+            if (status === 'unverified')  unverifiedCount++;
+          }
+        });
+        return next;
+      });
+
+      if (filledCount > 0)      toast.success(`${filledCount} products filled!`);
+      if (unverifiedCount > 0)  toast.warning(`${unverifiedCount} products are unverified - please fill manually`);
+
+    } catch {
+      toast.error('AI fill failed');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // ── Save all to DB ─────────────────────────────────────────
   // const handleSaveAll = async () => {
@@ -678,6 +760,7 @@ const handleAiFill = async () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-10">#</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-12">Image</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product URL</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-primary">

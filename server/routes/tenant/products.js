@@ -124,6 +124,38 @@ router.post('/', auth, tenantResolver, async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // });
+// router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
+//   try {
+//     const { field, updates } = req.body;
+
+//     const bulkOps = updates.map(({ id, value }) => ({
+//       updateOne: {
+//         filter: { sourceId: String(id) },
+//         update: { 
+//           $set: { 
+//             [field]:                    value, 
+//             field_optimization_status: 'completed',  // ← இது மட்டும் add பண்ணணும்
+//             updatedAt:                  new Date() 
+//           } 
+//         }
+//       }
+//     }));
+
+//     await req.tenantDb.collection('products').bulkWrite(bulkOps);
+
+//     const auditBulkOps = updates.map(({ id }) => ({
+//       updateOne: {
+//         filter: { sourceId: String(id) },
+//         update: { $pull: { issues: { field } } }
+//       }
+//     }));
+//     await req.tenantDb.collection('feed_audit_products').bulkWrite(auditBulkOps);
+
+//     res.json({ message: 'Products updated successfully' });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// });
 router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
   try {
     const { field, updates } = req.body;
@@ -133,8 +165,8 @@ router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
         filter: { sourceId: String(id) },
         update: { 
           $set: { 
-            [field]:                    value, 
-            field_optimization_status: 'completed',  // ← இது மட்டும் add பண்ணணும்
+            [field]:                    value?.trim() || null,  // ← இது மட்டும் மாத்து
+            field_optimization_status: 'completed',
             updatedAt:                  new Date() 
           } 
         }

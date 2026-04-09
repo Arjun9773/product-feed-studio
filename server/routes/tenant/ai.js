@@ -16,11 +16,29 @@ router.post('/fill-field', auth, tenantResolver, async (req, res) => {
     const results = await Promise.all(
       products.map(async (product) => {
         try {
-          const prompt = `Product: "${product.product_name || product.title || ''}"
-            Brand: "${product.brand || ''}"
-            Category: "${product.category || ''}"
-            What is the "${fieldLabel}" for this product?
-            Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`;
+          const prompt = `You are a product data specialist. Extract product attributes from the given details.
+
+Product Name: "${product.product_name || product.title || ''}"
+Brand: "${product.brand || ''}"
+Category: "${product.category || ''}"
+Price: "${product.price || ''}"
+Product URL: "${product.product_url || ''}"
+
+Task: What is the "${fieldLabel}" for this product?
+
+Examples of good responses:
+- Colour → "Black" or "Silver" or "White"
+- Size → "43 inches" or "XL" or "250ml"
+- Material → "Plastic" or "Cotton" or "Metal"
+- Gender → "Male" or "Female" or "Unisex"
+- Age Group → "Adults" or "Kids" or "All Ages"
+
+Rules:
+- Return ONLY the value, nothing else
+- Extract from product name if possible
+- Maximum 3 words
+- If genuinely cannot determine, return: null
+- NEVER return "N/A", "Not available", "No ${fieldLabel}", "Unknown", "Not specified"`;
 
           const response = await axios.post(
             'https://openrouter.ai/api/v1/chat/completions',
@@ -36,11 +54,22 @@ router.post('/fill-field', auth, tenantResolver, async (req, res) => {
             }
           );
 
-          const value = response.data?.choices?.[0]?.message?.content?.trim() || '';
-          return { id: product.sourceId, value };
+          const raw = response.data?.choices?.[0]?.message?.content?.trim() || '';
+
+          const isSentence    = raw.split(' ').length > 4;
+          const isPlaceholder = /^(null|n\/a|na|no\b|not\b|none|unknown|unspecified|undefined)/i.test(raw);
+          const value         = (isSentence || isPlaceholder) ? '' : raw;
+
+          console.log(`[AI] ${product.product_name} → raw: "${raw}" → final: "${value}"`);
+
+          return {
+            id:     product.sourceId,
+            value,
+            status: value ? 'filled' : 'unverified'
+          };
 
         } catch {
-          return { id: product.sourceId, value: '' };
+          return { id: product.sourceId, value: '', status: 'unverified' };
         }
       })
     );

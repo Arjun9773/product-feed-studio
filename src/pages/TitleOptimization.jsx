@@ -202,6 +202,7 @@ function AddRuleForm({ onSave, onCancel, categories, editRule = null }) {
                 }}
               >
                 <option value="">Select category...</option>
+                <option value="all">All Categories</option>  {/* ← இது add பண்ணு */}
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
