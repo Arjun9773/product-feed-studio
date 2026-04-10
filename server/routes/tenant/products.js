@@ -214,4 +214,34 @@ router.delete('/:id', auth, tenantResolver, async (req, res) => {
   }
 });
 
+
+// for keywords
+// products.js-ல இதை add பண்ணு (existing route தொடாதே)
+
+// GET /api/products/with-keywords
+router.get('/with-keywords', auth, tenantResolver, async (req, res) => {
+  try {
+    const products = await req.tenantDb.collection('products')
+      .find({ is_active: true })
+      .toArray();
+
+    const sourceIds  = products.map(p => p.sourceId);
+    const keywordDocs = await req.tenantDb.collection('keywords')
+      .find({ sourceId: { $in: sourceIds } })
+      .toArray();
+
+    const kwMap = {};
+    keywordDocs.forEach(k => { kwMap[k.sourceId] = k.active_keywords || []; });
+
+    const withKeywords = products.map(p => ({
+      ...p,
+      active_keywords: kwMap[p.sourceId] || [],
+    }));
+
+    res.json(withKeywords);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

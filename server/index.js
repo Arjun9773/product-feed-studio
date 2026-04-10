@@ -6,6 +6,7 @@ const { connectDB } = require('./config/db');
 const cronRoutes       = require('./routes/cronRoutes');
 const path = require('path');
 const aiRoutes = require('./routes/tenant/ai');
+const keywordsRouter = require('./routes/tenant/keywords');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/api/output-feeds', require('./routes/tenant/outputFeeds'));
 app.use('/api/settings', require('./routes/tenant/settings'));
 app.use('/api/cron', cronRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/keywords', keywordsRouter);
 
 app.post('/api/test-signup', (req, res) => res.json({ ok: true, body: req.body }));
 app.get('/', (req, res) => res.json({ message: 'Product Feed Studio API running' }));
