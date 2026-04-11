@@ -16,7 +16,6 @@ router.get('/', auth, tenantResolver, async (req, res) => {
   }
 });
 
-
 // GET /api/products/missing-field?field=color — Products missing a specific field
 // router.get('/missing-field', auth, tenantResolver, async (req, res) => {
 //   try {
