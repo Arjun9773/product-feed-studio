@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import API from "@/hooks/useApi";
 import {
   FileText, Search, PencilLine, MinusCircle, Plus, X,
   ArrowLeftRight, Trash2, CheckCircle, AlertCircle, Tag, Package,
@@ -490,114 +491,218 @@ function CSVImportTab({ products, onApply }) {
 // ============================================
 // AIBatchTab
 // ============================================
-function AIBatchTab({ products, onApply }) {
-  const [suggestions, setSuggestions] = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [accepted, setAccepted]       = useState({});
-  const [applied, setApplied]         = useState(false);
-  const [error, setError]             = useState('');
+function AIBatchTab({ products, onApply, onSave }) {
+  const [suggestions, setSuggestions]     = useState([]);
+  const [loading, setLoading]             = useState(false);
+  const [accepted, setAccepted]           = useState({});
+  const [applied, setApplied]             = useState(false);
+  const [error, setError]                 = useState('');
 
-  const generateSuggestions = async () => {
-    setLoading(true); setError(''); setSuggestions([]); setAccepted({}); setApplied(false);
-    try {
-      const prompt = `You are a product keyword optimization expert for an e-commerce platform.
-Given these products, suggest 3-5 highly relevant active keywords and 2-3 negative keywords for each.
-Return ONLY valid JSON array, no markdown, no explanation.
-Format: [{"id": "<sourceId>", "active": ["kw1","kw2",...], "negative": ["neg1","neg2",...], "confidence": <0.0-1.0>}]
+  // New states
+  const [selectionType, setSelectionType]   = useState('all');
+  const [selectionValue, setSelectionValue] = useState('');
+  const [customCount, setCustomCount]       = useState(50);
 
-Products:
-${products.map((p) => `id:${p.id} | "${p.name}" | SKU:${p.sku} | Category:${p.category} | Brand:${p.brand} | Price:₹${p.price} | Existing active:[${p.active.join(', ')}]`).join('\n')}`;
+  // Unique categories & brands
+  const categories = useMemo(() => {
+    console.log('Products:', products);
+    return [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+  }, [products]);
+  const brands     = useMemo(() => [...new Set(products.map(p => p.brand).filter(Boolean))].sort(), [products]);
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      const data  = await res.json();
-      const text  = data.content?.map((c) => c.text || '').join('');
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      const withNew = parsed.map((s) => {
-        const prod = products.find((p) => String(p.id) === String(s.id));
-        return {
-          ...s,
-          name:        prod?.name || '',
-          newActive:   s.active.filter((k) => !prod?.active.includes(k)),
-          newNegative: s.negative.filter((k) => !prod?.inactive.includes(k)),
-        };
-      }).filter((s) => s.newActive.length > 0 || s.newNegative.length > 0);
-      setSuggestions(withNew);
-    } catch (e) {
-      setError('Failed to generate suggestions. Please try again.');
+  // Selected products based on filter
+  const selectedProducts = useMemo(() => {
+    switch(selectionType) {
+      case 'category': return products.filter(p => p.category === selectionValue);
+      case 'brand':    return products.filter(p => p.brand === selectionValue);
+      case 'count':    return products.slice(0, Math.min(customCount, products.length));
+      default:         return products; // all
     }
-    setLoading(false);
-  };
+  }, [selectionType, selectionValue, customCount, products]);
 
-  const toggleAccept = (id, kw, type) => {
+  const selectCls = "border border-border rounded-lg px-2 py-1.5 text-xs bg-secondary text-foreground outline-none focus:border-ring";
+
+const generateSuggestions = async () => {
+  if (selectedProducts.length === 0) return;
+  setLoading(true); setError(''); setSuggestions([]); setAccepted({}); setApplied(false);
+  try {
+    const BATCH_SIZE = 3; // 3 products per AI call
+    const allParsed = [];
+
+    for (let i = 0; i < selectedProducts.length; i += BATCH_SIZE) {
+      const batch = selectedProducts.slice(i, i + BATCH_SIZE);
+      const res = await API.post('/keywords/ai-suggest', { products: batch });
+      if (res.data?.data) {
+        allParsed.push(...res.data.data);
+      }
+    }
+
+    const withNew = allParsed.map((s) => {
+      const prod = selectedProducts.find((p) => String(p.id) === String(s.id));
+      return {
+        ...s,
+        name:        prod?.name || '',
+        newActive:   s.active.filter((k) => !prod?.active.includes(k)),
+  
+      };
+    }).filter((s) => s.newActive.length > 0 || s.newNegative.length > 0);
+
+    setSuggestions(withNew);
+  } catch (e) {
+    setError('Failed to generate suggestions. Please try again.');
+  }
+  setLoading(false);
+};
+
+  const toggleAccept  = (id, kw, type) => {
     const key = `${id}__${type}__${kw}`;
     setAccepted((prev) => ({ ...prev, [key]: !prev[key] }));
   };
-
-  const isAccepted = (id, kw, type) => !!accepted[`${id}__${type}__${kw}`];
+  const isAccepted    = (id, kw, type) => !!accepted[`${id}__${type}__${kw}`];
+  const acceptedCount = Object.values(accepted).filter(Boolean).length;
 
   const acceptAll = () => {
     const next = {};
     suggestions.forEach((s) => {
       if (s.confidence >= 0.8) {
-        s.newActive.forEach((k) => { next[`${s.id}__active__${k}`] = true; });
-        s.newNegative.forEach((k) => { next[`${s.id}__negative__${k}`] = true; });
+        s.newActive.forEach((k)   => { next[`${s.id}__active__${k}`]   = true; });
+        
       }
     });
     setAccepted(next);
   };
 
-  const applyAccepted = () => {
-    const updated = products.map((p) => {
-      const sugg = suggestions.find((s) => String(s.id) === String(p.id));
-      if (!sugg) return p;
-      return {
-        ...p,
-        active:   [...new Set([...p.active,   ...sugg.newActive.filter((k) => isAccepted(p.id, k, 'active'))])],
-        inactive: [...new Set([...p.inactive, ...sugg.newNegative.filter((k) => isAccepted(p.id, k, 'negative'))])],
-      };
-    });
-    onApply(updated);
-    setApplied(true);
-  };
+ const applyAccepted = async () => {
+  const updated = products.map((p) => {
+    const sugg = suggestions.find((s) => String(s.id) === String(p.id));
+    if (!sugg) return p;
+    return {
+      ...p,
+      active:   [...new Set([...p.active,   ...sugg.newActive.filter((k) => isAccepted(p.id, k, 'active'))])],
+     
+    };
+  });
 
-  const acceptedCount = Object.values(accepted).filter(Boolean).length;
+  onApply(updated); 
+  setApplied(true);
+
+
+  try {
+    await onSave(); 
+  } catch {
+  
+  }
+};
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4">
+
+        {/* ── Selection UI ── */}
         {suggestions.length === 0 && !loading && (
-          <div className="text-center py-8">
-            <Bot size={32} className="text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm font-medium text-foreground mb-1">AI Keyword Suggestions</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              AI will analyze all {products.length} products and suggest relevant keywords based on name, category, brand, and price.
-            </p>
-            {error && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive mb-3 text-left">
-                <AlertTriangle size={13} />{error}
+          <div className="space-y-4">
+
+            {/* Selection controls */}
+            <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
+              <p className="text-xs font-medium text-foreground">Select products to optimize</p>
+
+              {/* Type dropdown */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <select
+                  value={selectionType}
+                  onChange={(e) => { setSelectionType(e.target.value); setSelectionValue(''); }}
+                  className={selectCls}
+                >
+                  <option value="all">All products</option>
+                  <option value="category">By Category</option>
+                  <option value="brand">By Brand</option>
+                  <option value="count">Custom count</option>
+                </select>
+
+                {/* Category dropdown */}
+                {selectionType === 'category' && (
+                  <select
+                    value={selectionValue}
+                    onChange={(e) => setSelectionValue(e.target.value)}
+                    className={selectCls}
+                  >
+                    <option value="">Select category...</option>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
+
+                {/* Brand dropdown */}
+                {selectionType === 'brand' && (
+                  <select
+                    value={selectionValue}
+                    onChange={(e) => setSelectionValue(e.target.value)}
+                    className={selectCls}
+                  >
+                    <option value="">Select brand...</option>
+                    {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                )}
+
+                {/* Count input */}
+                {selectionType === 'count' && (
+                  <input
+                    type="number"
+                    min={1}
+                    max={products.length}
+                    value={customCount}
+                    onChange={(e) => setCustomCount(parseInt(e.target.value) || 1)}
+                    className={`${selectCls} w-24`}
+                    placeholder="Count..."
+                  />
+                )}
               </div>
-            )}
-            <button onClick={generateSuggestions} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium cursor-pointer border-none hover:opacity-90 transition-colors">
-              <Bot size={15} /> Generate suggestions
-            </button>
+
+              {/* Count badge */}
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-medium px-3 py-1 rounded-full ${selectedProducts.length > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                  {selectedProducts.length} products selected
+                </span>
+                {selectionType === 'category' && selectionValue && (
+                  <span className="text-xs text-muted-foreground">Category: {selectionValue}</span>
+                )}
+                {selectionType === 'brand' && selectionValue && (
+                  <span className="text-xs text-muted-foreground">Brand: {selectionValue}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Generate button */}
+            <div className="text-center py-4">
+              <Bot size={32} className="text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm font-medium text-foreground mb-1">AI Keyword Suggestions</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                AI will analyze {selectedProducts.length} selected products and suggest relevant keywords.
+              </p>
+              {error && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive mb-3 text-left">
+                  <AlertTriangle size={13} />{error}
+                </div>
+              )}
+              <button
+                onClick={generateSuggestions}
+                disabled={selectedProducts.length === 0 || (selectionType === 'category' && !selectionValue) || (selectionType === 'brand' && !selectionValue)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium cursor-pointer border-none hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-default">
+                <Bot size={15} /> Generate for {selectedProducts.length} products
+              </button>
+            </div>
           </div>
         )}
+
+        {/* Loading */}
         {loading && (
           <div className="text-center py-10">
             <Loader2 size={28} className="text-primary mx-auto mb-3 animate-spin" />
-            <p className="text-sm font-medium text-foreground">Analyzing {products.length} products…</p>
+            <p className="text-sm font-medium text-foreground">Analyzing {selectedProducts.length} products…</p>
             <p className="text-xs text-muted-foreground mt-1">AI is reading product titles, categories, and brands</p>
           </div>
         )}
+
+        {/* Suggestions */}
         {suggestions.length > 0 && (
           <>
             {applied && (
@@ -627,12 +732,6 @@ ${products.map((p) => `id:${p.id} | "${p.name}" | SKU:${p.sku} | Category:${p.ca
                         {isAccepted(s.id, k, 'active') && <Check size={10} />}{k}
                       </button>
                     ))}
-                    {s.newNegative.map((k) => (
-                      <button key={k} onClick={() => toggleAccept(s.id, k, 'negative')}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] cursor-pointer border transition-colors ${isAccepted(s.id, k, 'negative') ? 'bg-destructive text-destructive-foreground border-destructive' : 'bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20'}`}>
-                        {isAccepted(s.id, k, 'negative') && <Check size={10} />}{k} (neg)
-                      </button>
-                    ))}
                   </div>
                 </div>
               ))}
@@ -640,10 +739,17 @@ ${products.map((p) => `id:${p.id} | "${p.name}" | SKU:${p.sku} | Category:${p.ca
           </>
         )}
       </div>
+
+      {/* Footer */}
       {suggestions.length > 0 && (
         <div className="p-3 border-t border-border flex items-center gap-3 bg-secondary/50">
           <span className="text-[11px] text-muted-foreground flex-1">{acceptedCount} keywords selected</span>
-          <button onClick={generateSuggestions} className="flex items-center gap-1 px-3 py-2 rounded-lg border border-border bg-card text-foreground text-xs cursor-pointer hover:bg-secondary">
+          <button onClick={() => { setSuggestions([]); setAccepted({}); setApplied(false); }}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg border border-border bg-card text-foreground text-xs cursor-pointer hover:bg-secondary">
+            <RotateCcw size={12} /> Back
+          </button>
+          <button onClick={generateSuggestions}
+            className="flex items-center gap-1 px-3 py-2 rounded-lg border border-border bg-card text-foreground text-xs cursor-pointer hover:bg-secondary">
             <RotateCcw size={12} /> Regenerate
           </button>
           <button
@@ -1106,7 +1212,7 @@ export default function KeywordOptimization() {
                   <CSVImportTab products={products} onApply={(updated) => updateProducts(updated)} />
                 )}
                 {bulkTab === 'ai' && (
-                  <AIBatchTab products={products} onApply={(updated) => updateProducts(updated)} />
+                  <AIBatchTab products={products} onApply={(updated) => updateProducts(updated)}onSave={handleSave} />
                 )}
               </div>
             </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const auth = require('../../middleware/auth');
 const tenantResolver = require('../../middleware/tenantResolver');
 const Merchant = require('../../models/Merchant');
+const { getCategoryFromAI } = require("../../config/aiProvider");
 
 const router = express.Router();
 
@@ -125,5 +126,45 @@ router.put('/save', auth, tenantResolver, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// POST /api/keywords/ai-suggest
+router.post('/ai-suggest', auth, tenantResolver, async (req, res) => {
+  try {
+    const { products } = req.body;
+    if (!products?.length) {
+      return res.status(400).json({ success: false, message: 'No products provided' });
+    }
+
+    // Max 5 products per call — prevents truncation
+    const batch = products.slice(0, 5);
+
+  const prompt = `You are a product keyword expert for Google Shopping ads.
+For each product, suggest 5-6 strong, highly relevant POSITIVE/ACTIVE keywords only.
+These keywords should be specific search terms customers would use to find this product.
+
+Return ONLY a valid JSON array. No explanation. No markdown.
+Format: [{"id":"<id>","active":["kw1","kw2","kw3","kw4","kw5"],"confidence":0.9}]
+
+Products:
+${batch.map(p => `id:${p.id} | "${p.name}" | ${p.category} | ${p.brand}`).join('\n')}
+
+Return EXACTLY ${batch.length} items. Valid JSON only.`;
+
+    const raw = await getCategoryFromAI(prompt);
+    console.log('[AI Raw Response]:', raw.substring(0, 500));
+
+    // Extract JSON array
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('No JSON array found in response');
+
+    const parsed = JSON.parse(match[0]);
+    res.json({ success: true, data: parsed });
+
+  } catch (err) {
+    console.error('AI suggest error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 
 module.exports = router;
