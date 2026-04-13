@@ -2,6 +2,7 @@ const fs         = require('fs');
 const path       = require('path');
 const FeedFormat = require('../models/FeedFormat');
 
+// ── XML escape ────────────────────────────────────────────────
 function escapeXml(str) {
   return String(str ?? '')
     .replace(/&/g,  '&amp;')
@@ -11,38 +12,73 @@ function escapeXml(str) {
     .replace(/'/g,  '&apos;');
 }
 
+// ── CSV escape ────────────────────────────────────────────────
 function csvEscape(str, qualifier = '') {
   const s = String(str ?? '');
   if (!qualifier) return s;
   return `${qualifier}${s.replace(new RegExp(qualifier, 'g'), `\\${qualifier}`)}${qualifier}`;
 }
 
+// ── DB internal fields — feed-ல் வரக்கூடாதவை ────────────────
+const SKIP_FIELDS = new Set([
+  '_id',
+  '__v',
+  'tenantId',
+  'feedId',
+  'importedAt',
+  'updatedAt',
+  'deactivatedAt',
+  'field_optimization_status',
+  'title_optimization_status',
+  'is_active',
+]);
+
+// ── null / empty check ────────────────────────────────────────
+function isEmpty(val) {
+  return val === null || val === undefined || val === '' || val === 'null';
+}
+
+// ── Google Shopping XML ───────────────────────────────────────
 function generateXML(products, feed) {
   const currency = feed.format_subtype_currency || 'INR';
   const tracking = feed.output_feed_tracking ? `?${feed.output_feed_tracking}` : '';
 
   const items = products.map(p => {
-    const wasPrice = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0;
+    const price    = p.price != null ? `${p.price} ${currency}` : null;
+    const wasPrice = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0
+                   ? `${Number(p.was_price)} ${currency}` : null;
+    const avail    = p.stock > 0 ? 'in_stock' : 'out_of_stock';
+    const link     = (feed.output_link_text || p.product_url || '') + tracking;
+    const title    = feed.output_title_text || p.product_name || '';
+    const desc     = feed.output_desc_text  || p.description  || '';
+
+    // Special fields — already handled above, dynamic loop-ல் skip பண்ணணும்
+    const skipInDynamic = new Set([
+      'sourceId', 'product_name', 'description', 'product_url',
+      'stock', 'price', 'was_price',
+    ]);
+
+    // DB-ல் உள்ள மற்ற எல்லா fields-உம் dynamic-ஆ போகும்
+    const dynamicTags = Object.entries(p)
+      .filter(([key, val]) =>
+        !SKIP_FIELDS.has(key) &&
+        !skipInDynamic.has(key) &&
+        !isEmpty(val)
+      )
+      .map(([key, val]) => `<g:${key}>${escapeXml(String(val))}</g:${key}>`)
+      .join('\n      ');
 
     return `
     <item>
       <g:id>${escapeXml(p.sourceId)}</g:id>
-      <g:title>${escapeXml(feed.output_title_text || p.product_name || '')}</g:title>
-      <g:description>${escapeXml(feed.output_desc_text || p.description || '')}</g:description>
-      <g:link>${escapeXml((feed.output_link_text || p.product_url || '') + tracking)}</g:link>
-      <g:image_link>${escapeXml(p.additional_image1 || '')}</g:image_link>
-      ${p.price != null ? `<g:price>${p.price} ${currency}</g:price>` : ''}
-      <g:availability>${p.stock > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
+      <g:title>${escapeXml(title)}</g:title>
+      <g:description>${escapeXml(desc)}</g:description>
+      <g:link>${escapeXml(link)}</g:link>
+      <g:availability>${avail}</g:availability>
       <g:condition>new</g:condition>
-      ${p.brand            ? `<g:brand>${escapeXml(p.brand)}</g:brand>` : ''}
-      ${p.gtin             ? `<g:gtin>${escapeXml(p.gtin)}</g:gtin>` : ''}
-      ${p.google_category  ? `<g:google_product_category>${escapeXml(p.google_category)}</g:google_product_category>` : ''}
-      ${p.color            ? `<g:color>${escapeXml(p.color)}</g:color>` : ''}
-      ${p.age_group        ? `<g:age_group>${escapeXml(p.age_group)}</g:age_group>` : ''}
-      ${p.gender           ? `<g:gender>${escapeXml(p.gender)}</g:gender>` : ''}
-      ${p.material         ? `<g:material>${escapeXml(p.material)}</g:material>` : ''}
-      ${p.custom_label_0   ? `<g:custom_label_0>${escapeXml(p.custom_label_0)}</g:custom_label_0>` : ''}
-      ${wasPrice           ? `<g:sale_price>${Number(p.was_price)} ${currency}</g:sale_price>` : ''}
+      ${price    ? `<g:price>${escapeXml(price)}</g:price>`              : ''}
+      ${wasPrice ? `<g:sale_price>${escapeXml(wasPrice)}</g:sale_price>` : ''}
+      ${dynamicTags}
     </item>`;
   }).join('');
 
@@ -57,66 +93,87 @@ function generateXML(products, feed) {
 </rss>`;
 }
 
+// ── Google Shopping CSV ───────────────────────────────────────
 function generateCSV(products, feed) {
   const currency  = feed.format_subtype_currency || 'INR';
   const tracking  = feed.output_feed_tracking ? `?${feed.output_feed_tracking}` : '';
   const qualifier = feed.op_text_qualifier === 'double' ? '"'
                   : feed.op_text_qualifier === 'single' ? "'"
                   : '';
+  const q = (val) => csvEscape(String(val ?? ''), qualifier);
 
-  const q = (val) => csvEscape(val, qualifier);
-
-  const headers = [
-    'id', 'title', 'description', 'link', 'image_link',
-    'price', 'availability', 'condition', 'brand', 'gtin',
-    'google_product_category', 'color', 'age_group',
-    'gender', 'material', 'custom_label_0',
-  ];
-
-  const rows = products.map(p => {
-    const wasPrice = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0;
-
-    return [
-      q(p.sourceId                                                              || ''),
-      q(feed.output_title_text || p.product_name                               || ''),
-      q(feed.output_desc_text  || p.description                                || ''),
-      q((feed.output_link_text || p.product_url || '') + tracking),
-      q(p.additional_image1                                                     || ''),
-      q(p.price != null ? `${p.price} ${currency}` : ''),
-      q(p.stock > 0 ? 'in_stock' : 'out_of_stock'),
-      q('new'),
-      q(p.brand           || ''),
-      q(p.gtin            || ''),
-      q(p.google_category || ''),
-      q(p.color           || ''),
-      q(p.age_group       || ''),
-      q(p.gender          || ''),
-      q(p.material        || ''),
-      q(p.custom_label_0  || ''),
-      // was_price valid number-ஆ இருந்தால் மட்டும் column சேர்க்கும்
-      ...(wasPrice ? [q(`${Number(p.was_price)} ${currency}`)] : []),
-    ].join(',');
+  // ── எல்லா products-இல் இருந்தும் unique columns collect பண்ணு ──
+  const allKeys = new Set();
+  products.forEach(p => {
+    Object.keys(p).forEach(key => {
+      if (!SKIP_FIELDS.has(key)) allKeys.add(key);
+    });
   });
 
-  // was_price ஏதாவது product-ல் valid-ஆ இருந்தால் header-லயும் சேர்க்கணும்
-  const hasWasPrice = products.some(
-    p => p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0
-  );
-  const finalHeaders = hasWasPrice ? [...headers, 'sale_price'] : headers;
+  // Fixed columns — இவை முதல்ல வரணும்
+  const fixedCols = [
+    'sourceId',
+    'product_name',
+    'description',
+    'product_url',
+    'additional_image1',
+    'additional_image2',
+    'additional_image3',
+    'additional_image4',
+    'additional_image5',
+    'additional_image6', // ✅ fixed
+    'additional_image7', // ✅ fixed
+    'additional_image8', // ✅ fixed
+    'price',
+    'was_price',
+    'stock',
+  ];
+
+  // Fixed-ல் இல்லாத மற்றவை alphabetical order-ல்
+  const remainingCols = [...allKeys]
+    .filter(k => !fixedCols.includes(k))
+    .sort();
+
+  const allCols = [
+    ...fixedCols.filter(k => allKeys.has(k)),
+    ...remainingCols,
+  ];
+
+  // ── Rows ──────────────────────────────────────────────────
+  const rows = products.map(p => {
+    return allCols.map(key => {
+      if (key === 'sourceId')     return q(p.sourceId || '');
+      if (key === 'product_name') return q(feed.output_title_text || p.product_name || '');
+      if (key === 'description')  return q(feed.output_desc_text  || p.description  || '');
+      if (key === 'product_url')  return q((feed.output_link_text || p.product_url  || '') + tracking);
+      if (key === 'stock')        return q(p.stock > 0 ? 'in_stock' : 'out_of_stock');
+      if (key === 'price')        return q(p.price != null ? `${p.price} ${currency}` : '');
+      if (key === 'was_price') {
+        const valid = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0;
+        return q(valid ? `${Number(p.was_price)} ${currency}` : '');
+      }
+
+      // Empty-ஆ இருந்தால் empty string
+      if (isEmpty(p[key])) return q('');
+
+      return q(String(p[key]));
+    }).join(',');
+  });
 
   const lines = feed.is_header === '1'
-    ? [finalHeaders.join(','), ...rows]
+    ? [allCols.join(','), ...rows]
     : rows;
 
   return lines.join('\n');
 }
 
+// ── Main generate function ────────────────────────────────────
 async function generateFeedFile({ tenantDb, feed }) {
   const fmt    = await FeedFormat.findOne({ feed_id: feed.output_format_id });
   const ext    = fmt?.feed_format || 'xml';
   const folder = fmt?.feed_folder || 'gb';
 
-  // ✅ FIX: is_active: true மட்டும் — archived/status field இல்லை DB-ல்
+  // ✅ is_active: true — active products மட்டும்
   const products = await tenantDb.collection('products')
     .find({ is_active: true })
     .toArray();
@@ -134,9 +191,7 @@ async function generateFeedFile({ tenantDb, feed }) {
     __dirname, '..', 'uploads', 'output_feeds',
     folder, feed.cmpid, feed.feedid
   );
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   const filename = `${feed.cmpid}_${folder}_${ext}_output.${ext}`;
   const filePath = path.join(dir, filename);
