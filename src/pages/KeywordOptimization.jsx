@@ -1035,67 +1035,71 @@ export default function KeywordOptimization() {
         </div>
 
         {/* ── Panels ── */}
-        <div className="grid gap-3" style={{ gridTemplateColumns: '280px minmax(0,1fr) minmax(0,1fr)' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: mode === 'bulk' ? '1fr' : '280px minmax(0,1fr) minmax(0,1fr)' }}>
 
-          {/* Panel 1 — Catalog */}
-          <div className="bg-card border border-border rounded-xl flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <div className="flex items-center justify-between mb-2.5">
-                <div className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
-                  <FileText size={15} /> Product catalog
-                </div>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">{filtered.length} items</span>
-              </div>
-              <div className="relative">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                  placeholder="Filter by name or SKU…"
-                  className="w-full border border-border rounded-lg pl-7 pr-3 py-1.5 text-xs bg-secondary text-foreground outline-none focus:border-ring" />
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {pageSlice.length === 0 && (
-                <div className="px-4 py-5 text-xs text-muted-foreground">No products found</div>
-              )}
-              {pageSlice.map((p) => (
-                <div key={p.id} onClick={() => setSelectedId(p.id)}
-                  className={`flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border cursor-pointer transition-colors
-                    ${p.id === selectedId ? 'bg-primary/5 border-l-[3px] border-l-primary' : 'bg-card border-l-[3px] border-l-transparent hover:bg-secondary'}`}>
-                  <ProductThumb name={p.name} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-foreground truncate">{p.name}</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">SKU: {p.sku}</div>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status === 'active' ? 'bg-success' : 'bg-muted-foreground/40'}`} />
-                      <span className="text-[10px] text-muted-foreground">{p.status === 'active' ? 'Active' : 'Inactive'}</span>
-                      {p.active.length > 0 && (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-info/10 text-info">{p.active.length} tags</span>
-                      )}
+        {mode === 'manual' && (
+          <>
+             {/* Panel 1 — Catalog */}
+              <div className="bg-card border border-border rounded-xl flex flex-col overflow-hidden">
+                <div className="p-4 border-b border-border">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
+                      <FileText size={15} /> Product catalog
                     </div>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">{filtered.length} items</span>
+                  </div>
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                      placeholder="Filter by name or SKU…"
+                      className="w-full border border-border rounded-lg pl-7 pr-3 py-1.5 text-xs bg-secondary text-foreground outline-none focus:border-ring" />
                   </div>
                 </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-between px-3.5 py-2 border-t border-border">
-              <span className="text-[11px] text-muted-foreground">
-                {filtered.length === 0 ? '0' : Math.min((curPage - 1) * PER_PAGE + 1, filtered.length)}–{Math.min(curPage * PER_PAGE, filtered.length)} of {filtered.length}
-              </span>
-              <div className="flex gap-1">
-                {[
-                  { label: '‹', onClick: () => setPage((p) => Math.max(1, p - 1)), disabled: curPage === 1 },
-                  ...Array.from({ length: maxPage }, (_, i) => ({ label: String(i + 1), onClick: () => setPage(i + 1), active: curPage === i + 1 })),
-                  { label: '›', onClick: () => setPage((p) => Math.min(maxPage, p + 1)), disabled: curPage === maxPage },
-                ].map((b, i) => (
-                  <button key={i} onClick={b.onClick} disabled={b.disabled}
-                    className={`w-6 h-6 rounded-md border text-xs flex items-center justify-center transition-colors
-                      ${b.disabled ? 'opacity-40 cursor-default' : 'cursor-pointer'}
-                      ${b.active ? 'bg-info/10 border-info/30 text-info font-medium' : 'bg-secondary border-border text-muted-foreground hover:bg-info/10 hover:text-info'}`}>
-                    {b.label}
-                  </button>
-                ))}
+                <div className="flex-1 overflow-y-auto">
+                  {pageSlice.length === 0 && (
+                    <div className="px-4 py-5 text-xs text-muted-foreground">No products found</div>
+                  )}
+                  {pageSlice.map((p) => (
+                    <div key={p.id} onClick={() => setSelectedId(p.id)}
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border cursor-pointer transition-colors
+                        ${p.id === selectedId ? 'bg-primary/5 border-l-[3px] border-l-primary' : 'bg-card border-l-[3px] border-l-transparent hover:bg-secondary'}`}>
+                      <ProductThumb name={p.name} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-foreground truncate">{p.name}</div>
+                        <div className="text-[11px] text-muted-foreground mt-0.5">SKU: {p.sku}</div>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status === 'active' ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                          <span className="text-[10px] text-muted-foreground">{p.status === 'active' ? 'Active' : 'Inactive'}</span>
+                          {p.active.length > 0 && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-info/10 text-info">{p.active.length} tags</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between px-3.5 py-2 border-t border-border">
+                  <span className="text-[11px] text-muted-foreground">
+                    {filtered.length === 0 ? '0' : Math.min((curPage - 1) * PER_PAGE + 1, filtered.length)}–{Math.min(curPage * PER_PAGE, filtered.length)} of {filtered.length}
+                  </span>
+                  <div className="flex gap-1">
+                    {[
+                      { label: '‹', onClick: () => setPage((p) => Math.max(1, p - 1)), disabled: curPage === 1 },
+                      ...Array.from({ length: maxPage }, (_, i) => ({ label: String(i + 1), onClick: () => setPage(i + 1), active: curPage === i + 1 })),
+                      { label: '›', onClick: () => setPage((p) => Math.min(maxPage, p + 1)), disabled: curPage === maxPage },
+                    ].map((b, i) => (
+                      <button key={i} onClick={b.onClick} disabled={b.disabled}
+                        className={`w-6 h-6 rounded-md border text-xs flex items-center justify-center transition-colors
+                          ${b.disabled ? 'opacity-40 cursor-default' : 'cursor-pointer'}
+                          ${b.active ? 'bg-info/10 border-info/30 text-info font-medium' : 'bg-secondary border-border text-muted-foreground hover:bg-info/10 hover:text-info'}`}>
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+          </>
+        )}
 
           {/* Manual mode panels */}
           {mode === 'manual' && (

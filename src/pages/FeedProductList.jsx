@@ -37,6 +37,10 @@ const PIN_ORDER = [
   "gender", "material", "gtin",
 ];
 
+const COLUMN_CONFIG = {
+  active_keywords: { label: "Keywords" }
+};
+
 // ── Extract dynamic columns from first product ────────────────
 function extractColumns(products) {
   if (!products.length) return [];
@@ -57,8 +61,20 @@ function extractColumns(products) {
 }
 
 // ── Pretty label ──────────────────────────────────────────────
+// function fieldLabel(key) {
+//   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// }
+
 function fieldLabel(key) {
-  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  // configல label இருந்தா அதை use பண்ணு
+  if (COLUMN_CONFIG[key]?.label) {
+    return COLUMN_CONFIG[key].label;
+  }
+
+  // இல்லனா auto format
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ── Inline Editable Cell ──────────────────────────────────────
@@ -377,7 +393,7 @@ export default function FeedProductList() {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-        💡 Click any ✎ cell to edit · Enter to save · Esc to cancel
+         Click any  cell to edit · Enter to save · Esc to cancel
       </p>
     </motion.div>
   );
