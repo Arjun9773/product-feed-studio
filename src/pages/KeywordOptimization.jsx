@@ -1039,10 +1039,10 @@ export default function KeywordOptimization() {
                     </div>
                   )}
                 </div>
-                <div className="p-3.5 border-t border-border flex gap-2 items-center">
+                {/* <div className="p-3.5 border-t border-border flex gap-2 items-center">
                   <input value={negInput} onChange={(e) => setNegInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addKw('inactive')} placeholder="Add negative keyword..." className="flex-1 border border-border rounded-lg px-3 py-2 text-xs bg-secondary text-foreground outline-none focus:border-ring"/>
                   <button onClick={() => addKw('inactive')} className="w-[34px] h-[34px] rounded-lg bg-destructive hover:opacity-90 text-destructive-foreground flex items-center justify-center flex-shrink-0 border-none cursor-pointer transition-colors"><Plus size={16}/></button>
-                </div>
+                </div> */}
               </div>
             </>
           )}
