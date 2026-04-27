@@ -40,8 +40,8 @@ export function AppHeader({ onMenuToggle }) {
     document.documentElement.classList.toggle("dark");
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();     
     navigate('/login');
   };
 
