@@ -16,15 +16,18 @@ const SKIP_FIELDS = new Set([
   "_id", "__v", "feedId", "tenantId", "is_active",
   "deactivatedAt", "importedAt", "updatedAt",
   "title_optimization_status", "field_optimization_status",
+  "google_category_optimization_status",
+  "keyword_optimization_status",
 ]);
 
 // ── Read-only (show but no edit) ──────────────────────────────
 const READONLY_FIELDS = new Set([
-  "sourceId", "item_code", "product_url",
+  "sourceId", "item_code", "product_url", "products_url",
 ]);
 
 // ── Image fields ──────────────────────────────────────────────
 const IMAGE_FIELDS = new Set([
+  "product_image",
   "additional_image1", "additional_image2", "additional_image3",
   "additional_image4", "additional_image5", "additional_image6",
   "additional_image7", "additional_image8",
@@ -49,7 +52,6 @@ function extractColumns(products) {
 
   const visible = [...allKeys].filter((k) => !SKIP_FIELDS.has(k));
 
-  // Sort: pinned first, then alphabetical
   return visible.sort((a, b) => {
     const ai = PIN_ORDER.indexOf(a);
     const bi = PIN_ORDER.indexOf(b);
@@ -61,20 +63,9 @@ function extractColumns(products) {
 }
 
 // ── Pretty label ──────────────────────────────────────────────
-// function fieldLabel(key) {
-//   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-// }
-
 function fieldLabel(key) {
-  // configல label இருந்தா அதை use பண்ணு
-  if (COLUMN_CONFIG[key]?.label) {
-    return COLUMN_CONFIG[key].label;
-  }
-
-  // இல்லனா auto format
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  if (COLUMN_CONFIG[key]?.label) return COLUMN_CONFIG[key].label;
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ── Inline Editable Cell ──────────────────────────────────────
@@ -82,6 +73,7 @@ function EditableCell({ product, fieldKey, onSave }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue]     = useState(product[fieldKey] ?? "");
   const [status, setStatus]   = useState(null);
+  const [imgError, setImgError] = useState(false);
   const inputRef              = useRef(null);
 
   const isReadonly = READONLY_FIELDS.has(fieldKey);
@@ -121,9 +113,13 @@ function EditableCell({ product, fieldKey, onSave }) {
   if (isImage) {
     return (
       <td className="p-3">
-        {rawVal ? (
-          <img src={rawVal} alt="" className="h-10 w-10 rounded object-cover border border-border"
-            onError={(e) => { e.target.style.display = "none"; }} />
+        {rawVal && !imgError ? (
+          <img
+            src={rawVal}
+            alt=""
+            className="h-10 w-10 rounded object-cover border border-border"
+            onError={() => setImgError(true)}
+          />
         ) : (
           <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center border border-border">
             <ImageOff className="h-3.5 w-3.5 text-muted-foreground" />
@@ -193,8 +189,7 @@ export default function FeedProductList() {
     if (!currentStoreId) { setLoading(false); return; }
     try {
       setLoading(true); setError(null);
-      // const res  = await fetch(`${API_BASE}/api/products`, { headers });
-      const res = await fetch(`${API_BASE}/api/products/with-keywords`, { headers });
+      const res  = await fetch(`${API_BASE}/api/products/with-keywords`, { headers });
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
       setProducts(list);
@@ -371,10 +366,10 @@ export default function FeedProductList() {
             </Button>
             {Array.from({ length: Math.min(maxPage, 5) }, (_, i) => {
               let p;
-              if (maxPage <= 5)        p = i + 1;
-              else if (curPage <= 3)   p = i + 1;
+              if (maxPage <= 5)             p = i + 1;
+              else if (curPage <= 3)        p = i + 1;
               else if (curPage >= maxPage - 2) p = maxPage - 4 + i;
-              else                     p = curPage - 2 + i;
+              else                          p = curPage - 2 + i;
               return (
                 <Button key={p} size="sm" onClick={() => setPage(p)}
                   className={`h-8 min-w-[32px] ${curPage === p
@@ -393,7 +388,7 @@ export default function FeedProductList() {
       </div>
 
       <p className="text-xs text-muted-foreground text-center">
-         Click any  cell to edit · Enter to save · Esc to cancel
+        Click any cell to edit · Enter to save · Esc to cancel
       </p>
     </motion.div>
   );

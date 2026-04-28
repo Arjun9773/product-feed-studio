@@ -96,7 +96,7 @@ function FeedModal({ onClose, onSaved, editFeed }) {
     output_feed_name:        editFeed?.output_feed_name        ?? "",
     is_header:               editFeed?.is_header               ?? "1",
     op_text_qualifier:       editFeed?.op_text_qualifier       ?? "none",
-    // format_subtype_currency: editFeed?.format_subtype_currency ?? "INR",
+    format_subtype_currency: editFeed?.format_subtype_currency ?? "INR",
   });
 
   const headers = {
@@ -147,8 +147,9 @@ function FeedModal({ onClose, onSaved, editFeed }) {
         ? `${API_BASE}/api/output-feeds/${editFeed._id}`
         : `${API_BASE}/api/output-feeds`;
       const method = editFeed ? "PUT" : "POST";
-      const { format_subtype_currency, ...formWithoutCurrency } = form; // ← currency தனியா எடு
-      const res    = await fetch(url, { method, headers, body: JSON.stringify(formWithoutCurrency) });
+      // const { format_subtype_currency, ...formWithoutCurrency } = form; // ← currency தனியா எடு
+      // const res    = await fetch(url, { method, headers, body: JSON.stringify(formWithoutCurrency) });
+      const res = await fetch(url, { method, headers, body: JSON.stringify(form) });
       const data   = await res.json();
       if (!data.success) throw new Error(data.message);
       setSavedFeed(data.data);
@@ -306,7 +307,7 @@ function FeedModal({ onClose, onSaved, editFeed }) {
               )}
 
               {/* Currency */}
-              {/* <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4">
                 <label className="text-sm text-foreground w-36 shrink-0">
                   Currency :
                 </label>
@@ -321,7 +322,7 @@ function FeedModal({ onClose, onSaved, editFeed }) {
                     <option key={c}>{c}</option>
                   ))}
                 </select>
-              </div> */}
+              </div>
 
               {error && (
                 <p className="text-xs text-destructive flex items-center gap-1.5">
@@ -502,6 +503,8 @@ export default function OutputFeed() {
 
   async function handleRefresh(feed) {
     setRefreshing(prev => ({ ...prev, [feed._id]: true }));
+    // console.log('🔄 Refreshing feed:', feed._id);
+    // return false;
     try {
       const res  = await fetch(
         `${API_BASE}/api/output-feeds/${feed._id}/build`,
