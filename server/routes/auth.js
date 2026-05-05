@@ -14,7 +14,9 @@ const router = express.Router();
 const generateToken = (payload) =>
   jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
 
+// ─────────────────────────────────────────────
 // POST /api/auth/login
+// ─────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
@@ -49,19 +51,24 @@ router.post('/login', async (req, res) => {
       userId:    user.userId,
       userType:  user.userType,
       companyId: user.companyId,
+      email:     user.email,
     });
 
-    // Step 6: Save login log to main DB
-    const mainDb = mongoose.connection.useDb(process.env.MAIN_DB_NAME); // ✅ FIXED: uses MAIN_DB_NAME from .env — not hardcoded
-    await mainDb.collection('userlogs').insertOne({
-      userId:    user.userId,
-      email:     user.email,
-      userType:  user.userType,
-      companyId: user.companyId,
-      action:    'login',
-      loginAt:   new Date(),
-      ip:        req.ip || req.headers['x-forwarded-for'] || '',
-    });
+    // Step 6: Save login log — fail ஆனாலும் login block பண்ணாத
+    try {
+      const mainDb = mongoose.connection.useDb(process.env.MAIN_DB_NAME);
+      await mainDb.collection('userlogs').insertOne({
+        userId:    user.userId,
+        email:     user.email,
+        userType:  user.userType,
+        companyId: user.companyId,
+        action:    'login',
+        loginAt:   new Date(),
+        ip:        req.ip || req.headers['x-forwarded-for'] || '',
+      });
+    } catch (logErr) {
+      console.error('Login log failed:', logErr.message);
+    }
 
     // Step 7: Send response
     res.json({
@@ -79,7 +86,36 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// POST /api/auth/logout
+// ─────────────────────────────────────────────
+router.post('/logout', auth, async (req, res) => {
+  try {
+    // Logout log — fail ஆனாலும் response block பண்ணாத
+    try {
+      const mainDb = mongoose.connection.useDb(process.env.MAIN_DB_NAME);
+      await mainDb.collection('userlogs').insertOne({
+        userId:    req.user.userId,
+        email:     req.user.email || '',
+        userType:  req.user.userType,
+        companyId: req.user.companyId,
+        action:    'logout',
+        logoutAt:  new Date(),
+        ip:        req.ip || req.headers['x-forwarded-for'] || '',
+      });
+    } catch (logErr) {
+      console.error('Logout log failed:', logErr.message);
+    }
+
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────────
 // GET /api/auth/check-email
+// ─────────────────────────────────────────────
 router.get('/check-email', async (req, res) => {
   const { email } = req.query;
   if (!email) return res.json({ exists: false });
@@ -87,7 +123,9 @@ router.get('/check-email', async (req, res) => {
   res.json({ exists: !!user });
 });
 
+// ─────────────────────────────────────────────
 // GET /api/auth/check-companyname
+// ─────────────────────────────────────────────
 router.get('/check-companyname', async (req, res) => {
   const { companyName } = req.query;
   if (!companyName) return res.json({ exists: false });
@@ -99,7 +137,9 @@ router.get('/check-companyname', async (req, res) => {
   res.json({ exists: !!company });
 });
 
+// ─────────────────────────────────────────────
 // POST /api/auth/signup
+// ─────────────────────────────────────────────
 router.post('/signup', async (req, res) => {
   const { companyName, companyUrl, email, password, phone } = req.body;
   if (!companyName || !companyUrl || !email || !password)
@@ -110,7 +150,7 @@ router.post('/signup', async (req, res) => {
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ message: 'Email already registered' });
 
-    // Step 2: Create company — companyId auto slugified from companyName
+    // Step 2: Create company
     const company = await Company.create({
       companyName,
       companyUrl,
@@ -119,7 +159,7 @@ router.post('/signup', async (req, res) => {
 
     // Step 3: Create user
     const user = await User.create({
-      companyId:  company.companyId,
+      companyId:   company.companyId,
       companyName: companyName,
       companyUrl,
       email,
@@ -137,11 +177,11 @@ router.post('/signup', async (req, res) => {
 
     // Step 5: Create access record
     await Access.create({
-      companyId: company.companyId,
-      userId:    user.userId,
-      userType:  'store_admin',
+      companyId:   company.companyId,
+      userId:      user.userId,
+      userType:    'store_admin',
       companyName: companyName,
-      status:    'active',
+      status:      'active',
     });
 
     // Step 6: Provision tenant DB
@@ -167,7 +207,9 @@ router.post('/signup', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
 // POST /api/auth/seed-super-admin
+// ─────────────────────────────────────────────
 router.post('/seed-super-admin', async (req, res) => {
   try {
     const exists = await User.findOne({ userType: 'super_admin' });
@@ -177,13 +219,11 @@ router.post('/seed-super-admin', async (req, res) => {
     if (!companyUrl || !email || !password)
       return res.status(400).json({ message: 'companyUrl, email and password are required' });
 
-    // Create company for super admin
     const company = await Company.create({
       companyName: 'GMC Admin',
       status:      'active',
     });
 
-    // Create super admin user
     const admin = await User.create({
       companyId:  company.companyId,
       companyUrl,
@@ -192,7 +232,6 @@ router.post('/seed-super-admin', async (req, res) => {
       userType: 'super_admin',
     });
 
-    // Create access record
     await Access.create({
       companyId: company.companyId,
       userId:    admin.userId,
@@ -207,7 +246,9 @@ router.post('/seed-super-admin', async (req, res) => {
   }
 });
 
-// GET /api/auth/all-stores (super_admin only)
+// ─────────────────────────────────────────────
+// GET /api/auth/all-stores  (super_admin only)
+// ─────────────────────────────────────────────
 router.get('/all-stores', auth, roleCheck('super_admin'), async (req, res) => {
   try {
     const merchants = await Merchant.find({ status: 'active' });

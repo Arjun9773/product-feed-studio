@@ -19,14 +19,17 @@ import { useAuditFields } from "@/hooks/useAuditFields";
 // ============================================================
 const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
 
+// FIX 1: EXCLUDE_FIELDS defined at top level so it's used in filtering
+const EXCLUDE_FIELDS = ['google_category', 'proper_casing'];
+
 // ============================================================
 // PRODUCT ROW
 // ============================================================
 function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onClear, onInputChange }) {
-  const isFilled  = state?.value !== "" && state?.value != null;
+  const isFilled     = state?.value !== "" && state?.value != null;
   const isUnverified = state?.status === 'unverified' && !isFilled;
-  const isEditing = state?.editing;
-  const isDesc    = selectedField?.field === "description";
+  const isEditing    = state?.editing;
+  const isDesc       = selectedField?.field === "description";
 
   return (
     <tr
@@ -76,7 +79,6 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
         )}
       </td>
 
-
       {/* Category */}
       <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px]">
         <span className="truncate block">{product.category || "—"}</span>
@@ -119,8 +121,7 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
             )}
             <div className="flex items-center gap-2">
               <Button size="sm" className="h-7 text-xs gap-1 px-3" onClick={onSave} disabled={!state.inputVal.trim()}>
-                <Check className="h-3 w-3" />
-                {isDesc ? "Save" : "Save"}
+                <Check className="h-3 w-3" />Save
               </Button>
               <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>Cancel</Button>
             </div>
@@ -152,19 +153,7 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
         )}
       </td>
 
-      {/* Status Badge */}
-      {/* <td className="px-4 py-3">
-        {isFilled ? (
-          <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
-            <Check className="h-2.5 w-2.5" />Filled
-          </Badge>
-        ) : (
-          <Badge className="bg-secondary text-muted-foreground border-0 text-[10px]">
-            Empty
-          </Badge>
-        )}
-      </td> */}
-      {/* Status Badge */}
+      {/* FIX 4: Removed duplicate commented-out Status Badge <td> — only one clean block below */}
       <td className="px-4 py-3">
         {isFilled ? (
           <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
@@ -195,19 +184,22 @@ export default function FieldOptimization() {
   const [searchParams] = useSearchParams();
   const location       = useLocation();
 
-  // ── Dynamic fields from DB (via useAuditFields hook) ──────
   const { fields: ALL_FIELDS, loading: fieldsLoading } = useAuditFields();
-  
 
-  // ── Group fields by group name ─────────────────────────────
-   const FIELD_GROUPS = useMemo(() =>
-    ALL_FIELDS.reduce((acc, f) => {
-      const group = f.group || 'Select'; // fallback group
+  // FIX 1: Apply EXCLUDE_FIELDS filter here so dropdown never shows them
+  const VISIBLE_FIELDS = useMemo(
+    () => ALL_FIELDS.filter(f => !EXCLUDE_FIELDS.includes(f.field)),
+    [ALL_FIELDS]
+  );
+
+  const FIELD_GROUPS = useMemo(() =>
+    VISIBLE_FIELDS.reduce((acc, f) => {
+      const group = f.group || 'Select';
       if (!acc[group]) acc[group] = [];
       acc[group].push(f);
       return acc;
     }, {}),
-  [ALL_FIELDS]);
+  [VISIBLE_FIELDS]);
 
   // ── State ──────────────────────────────────────────────────
   const [selectedField,    setSelectedField]    = useState(null);
@@ -223,44 +215,45 @@ export default function FieldOptimization() {
 
   const { currentStoreId } = useAuth();
 
-  // ── Set initial selectedField once ALL_FIELDS loads ───────
+  // ── Set initial selectedField once VISIBLE_FIELDS loads ───
   useEffect(() => {
-    if (ALL_FIELDS.length === 0) return;
-    if (selectedField) return; // already set
+    if (VISIBLE_FIELDS.length === 0) return;
+    if (selectedField) return;
 
     const navField = location.state?.field;
     if (navField) {
-      const match = ALL_FIELDS.find(f => f.field === navField);
+      const match = VISIBLE_FIELDS.find(f => f.field === navField);
       if (match) { setSelectedField(match); return; }
     }
 
     const urlField = searchParams.get('field');
     if (urlField) {
-      const match = ALL_FIELDS.find(f => f.field === urlField);
+      const match = VISIBLE_FIELDS.find(f => f.field === urlField);
       if (match) { setSelectedField(match); return; }
     }
 
-    setSelectedField(ALL_FIELDS[0]);
-  }, [ALL_FIELDS]);
+    setSelectedField(VISIBLE_FIELDS[0]);
+  }, [VISIBLE_FIELDS]);
 
   // ── Re-sync when FeedAudit Fix button navigates here ──────
   useEffect(() => {
-    if (ALL_FIELDS.length === 0) return;
+    if (VISIBLE_FIELDS.length === 0) return;
     const navField = location.state?.field;
     if (!navField) return;
-    const match = ALL_FIELDS.find(f => f.field === navField);
+    const match = VISIBLE_FIELDS.find(f => f.field === navField);
     if (match) setSelectedField(match);
-  }, [location.state, ALL_FIELDS]);
+  }, [location.state, VISIBLE_FIELDS]);
 
   // ── Load products missing the selected field ───────────────
   const loadProducts = useCallback(async () => {
     if (!currentStoreId || !selectedField) return;
     setLoading(true);
     try {
-     const label = location.state?.label || '';
-    const res = await API.get(
-      `/products/missing-field?field=${selectedField.field}&label=${encodeURIComponent(label)}`
-    );
+      // FIX 2: Removed location.state?.label — it was never passed and always ''
+      // Now only `field` is sent, which is what the API actually needs
+      const res = await API.get(
+        `/products/missing-field?field=${selectedField.field}`
+      );
       const data = res.data ?? [];
       setProducts(data);
 
@@ -270,6 +263,7 @@ export default function FieldOptimization() {
           value:    p[selectedField.field] || "",
           editing:  false,
           inputVal: "",
+          status:   null, // FIX 3: initialise status so clear works correctly
         };
       });
       setProductStates(states);
@@ -327,107 +321,16 @@ export default function FieldOptimization() {
   }
 
   function handleClear(id) {
-    update(id, { value: "", editing: false, inputVal: "" });
+    // FIX 3: Reset status too so "Unverified" badge disappears on clear
+    update(id, { value: "", editing: false, inputVal: "", status: null });
   }
 
   function handleFieldChange(fieldValue) {
-    const match = ALL_FIELDS.find(f => f.field === fieldValue);
+    const match = VISIBLE_FIELDS.find(f => f.field === fieldValue);
     if (match) setSelectedField(match);
   }
 
   // ── AI Fill ────────────────────────────────────────────────
-//   const handleAiFill = async () => {
-//     if (!selectedField) return;
-//     setAiLoading(true);
-//     try {
-//       const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
-//       if (unfilled.length === 0) {
-//         toast.info("All products already filled!");
-//         return;
-//       }
-
-//       const updates = await Promise.all(
-//         unfilled.map(async (product) => {
-//           try {
-//             const response = await fetch("https://api.anthropic.com/v1/messages", {
-//               method: "POST",
-//               headers: { "Content-Type": "application/json" },
-//               body: JSON.stringify({
-//                 model: "claude-sonnet-4-20250514",
-//                 max_tokens: 100,
-//                 messages: [{
-//                   role: "user",
-//                   content: `Product: "${product.product_name || product.title}"
-// Brand: "${product.brand || ''}"
-// Category: "${product.category || ''}"
-// What is the "${selectedField.label}" for this product?
-// Reply with ONLY the value, nothing else. Keep it short (1-3 words max).`
-//                 }]
-//               })
-//             });
-//             const data  = await response.json();
-//             const value = data.content?.[0]?.text?.trim() || "";
-//             return { id: product.sourceId, value };
-//           } catch {
-//             return { id: product.sourceId, value: "" };
-//           }
-//         })
-//       );
-
-//       setProductStates(prev => {
-//         const next = { ...prev };
-//         updates.forEach(({ id, value }) => {
-//           if (value && next[id]) {
-//             next[id] = { ...next[id], value, editing: false, inputVal: "" };
-//           }
-//         });
-//         return next;
-//       });
-
-//       toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
-//     } catch {
-//       toast.error("AI fill failed");
-//     } finally {
-//       setAiLoading(false);
-//     }
-//   };
-
-
-// const handleAiFill = async () => {
-//   if (!selectedField) return;
-//   setAiLoading(true);
-//   try {
-//     const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
-//     if (unfilled.length === 0) {
-//       toast.info("All products already filled!");
-//       return;
-//     }
-
-//     const res = await API.post('/ai/fill-field', {
-//       products:   unfilled,
-//       fieldLabel: selectedField.label,
-//     });
-
-//     const updates = res.data?.data ?? [];
-
-//     setProductStates(prev => {
-//       const next = { ...prev };
-//       updates.forEach(({ id, value }) => {
-//         if (value && next[id]) {
-//           next[id] = { ...next[id], value, editing: false, inputVal: '' };
-//         }
-//       });
-//       return next;
-//     });
-
-//     toast.success(`AI filled ${updates.filter(u => u.value).length} products!`);
-//   } catch {
-//     toast.error('AI fill failed');
-//   } finally {
-//     setAiLoading(false);
-//   }
-// };
-
   const handleAiFill = async () => {
     if (!selectedField) return;
     setAiLoading(true);
@@ -445,7 +348,7 @@ export default function FieldOptimization() {
 
       const updates = res.data?.data ?? [];
 
-      let filledCount  = 0;
+      let filledCount    = 0;
       let unverifiedCount = 0;
 
       setProductStates(prev => {
@@ -453,15 +356,15 @@ export default function FieldOptimization() {
         updates.forEach(({ id, value, status }) => {
           if (next[id]) {
             next[id] = { ...next[id], value, editing: false, inputVal: '', status };
-            if (status === 'filled')      filledCount++;
-            if (status === 'unverified')  unverifiedCount++;
+            if (status === 'filled')     filledCount++;
+            if (status === 'unverified') unverifiedCount++;
           }
         });
         return next;
       });
 
-      if (filledCount > 0)      toast.success(`${filledCount} products filled!`);
-      if (unverifiedCount > 0)  toast.warning(`${unverifiedCount} products are unverified - please fill manually`);
+      if (filledCount > 0)     toast.success(`${filledCount} products filled!`);
+      if (unverifiedCount > 0) toast.warning(`${unverifiedCount} products are unverified - please fill manually`);
 
     } catch {
       toast.error('AI fill failed');
@@ -471,54 +374,31 @@ export default function FieldOptimization() {
   };
 
   // ── Save all to DB ─────────────────────────────────────────
-  // const handleSaveAll = async () => {
-  //   if (!selectedField) return;
-  //   const filled = Object.entries(productStates).filter(([, s]) => s.value !== "");
-  //   if (filled.length === 0) { toast.info("No values to save"); return; }
-  //   setSaving(true);
-  //   try {
-  //     const updates = filled.map(([id, s]) => ({ id, value: s.value }));
-  //     await API.put('/products/bulk-update', { field: selectedField.field, updates });
-  //     toast.success(`Saved ${filled.length} products!`);
-  //     loadProducts();
-  //   } catch {
-  //     toast.error("Failed to save");
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
-
   const handleSaveAll = async () => {
-    console.log('handleSaveAll called', { selectedField, productStates });
-  if (!selectedField) return;
-  
-  const filled = Object.entries(productStates).filter(([, s]) => s.value !== "" && s.value != null);
-  
-  if (filled.length === 0) { 
-    toast.info("No values to save"); 
-    return; 
-  }
-  
-  setSaving(true);
-  try {
-    const updates = filled.map(([id, s]) => ({ id, value: s.value }));
-    
-    const res = await API.put('/products/bulk-update', { 
-      field: selectedField.field, 
-      updates 
-    });
-    
-    if (res.status === 200) {
-      toast.success(`Saved ${filled.length} products!`);
-      await loadProducts(); // reload to reflect saved data
+    if (!selectedField) return;
+
+    const filled = Object.entries(productStates).filter(([, s]) => s.value !== "" && s.value != null);
+    if (filled.length === 0) { toast.info("No values to save"); return; }
+
+    setSaving(true);
+    try {
+      const updates = filled.map(([id, s]) => ({ id, value: s.value }));
+      const res = await API.put('/products/bulk-update', {
+        field: selectedField.field,
+        updates,
+      });
+
+      if (res.status === 200) {
+        toast.success(`Saved ${filled.length} products!`);
+        await loadProducts();
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      toast.error(err?.response?.data?.message || "Failed to save");
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    console.error('Save error:', err);
-    toast.error(err?.response?.data?.message || "Failed to save");
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   // ── Loading: fields not yet fetched ───────────────────────
   if (fieldsLoading || !selectedField) {
@@ -529,9 +409,6 @@ export default function FieldOptimization() {
       </div>
     );
   }
-
-  const EXCLUDE_FIELDS = ['google_category', 'proper_casing'];
-
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -568,10 +445,10 @@ export default function FieldOptimization() {
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Missing",    value: products.length,               icon: Package,      color: "text-primary",  bg: "bg-primary/10"  },
-          { label: "Fields Available", value: ALL_FIELDS.length,             icon: Layers,       color: "text-info",     bg: "bg-info/10"     },
-          { label: "Filled",           value: filledCount,                    icon: CheckCircle2, color: "text-success",  bg: "bg-success/10"  },
-          { label: "Remaining",        value: products.length - filledCount,  icon: AlertCircle,  color: "text-warning",  bg: "bg-warning/10"  },
+          { label: "Total Missing",    value: products.length,              icon: Package,      color: "text-primary",  bg: "bg-primary/10"  },
+          { label: "Fields Available", value: VISIBLE_FIELDS.length,        icon: Layers,       color: "text-info",     bg: "bg-info/10"     },
+          { label: "Filled",           value: filledCount,                   icon: CheckCircle2, color: "text-success",  bg: "bg-success/10"  },
+          { label: "Remaining",        value: products.length - filledCount, icon: AlertCircle,  color: "text-warning",  bg: "bg-warning/10"  },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
             <div className={`p-2 rounded-lg ${bg}`}>
@@ -589,7 +466,7 @@ export default function FieldOptimization() {
       <div className="bg-card rounded-xl p-4 border border-border space-y-3">
         <div className="flex flex-wrap items-end gap-4">
 
-          {/* Data Field — dynamic from DB */}
+          {/* Data Field — FIX 1: uses FIELD_GROUPS derived from VISIBLE_FIELDS (excludes EXCLUDE_FIELDS) */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Data Field</label>
             <select
@@ -697,7 +574,8 @@ export default function FieldOptimization() {
               onClick={() => {
                 const reset = {};
                 products.forEach(p => {
-                  reset[p.sourceId] = { value: "", editing: false, inputVal: "" };
+                  // FIX 3: Clear All also resets status
+                  reset[p.sourceId] = { value: "", editing: false, inputVal: "", status: null };
                 });
                 setProductStates(reset);
               }}

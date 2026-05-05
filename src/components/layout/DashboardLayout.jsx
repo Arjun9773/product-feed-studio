@@ -7,12 +7,20 @@ export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-      <div className="flex flex-1 flex-col min-w-0">
-        <AppHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 p-6 overflow-auto">
-          <Outlet />
+    <div className="h-screen w-full bg-background flex flex-col">
+      {/* Fixed Header */}
+      <AppHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+      
+      {/* Sidebar + Main Content */}
+      <div className="flex flex-1 min-w-0 overflow-hidden">
+        {/* Fixed Sidebar */}
+        <AppSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        
+        {/* Scrollable Main Content */}
+        <main className="flex-1 overflow-auto">
+          <div className="p-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

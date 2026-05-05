@@ -50,12 +50,38 @@ export function AuthProvider({ children }) {
     });
   };
 
-  const logout = () => {
+  // const logout = () => {
+  //   localStorage.clear();
+  //   setUser(null);
+  //   setActiveStoreId(null);
+  //   setActiveShopName(null);
+  // };
+
+  const logout = async () => {
+    const token = localStorage.getItem('token');
+
+    // Backend-ல userlog entry பண்ணு
+    if (token) {
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/logout`, {
+          method:  'POST',
+          headers: {
+            Authorization:  `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      } catch (err) {
+        console.error('Logout API failed:', err.message);
+        // fail ஆனாலும் local logout நடக்கும்
+      }
+    }
+
     localStorage.clear();
     setUser(null);
     setActiveStoreId(null);
     setActiveShopName(null);
   };
+
 
   const switchStore = (companyId, companyName) => {
     setActiveStoreId(companyId);

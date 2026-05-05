@@ -81,7 +81,8 @@ function FeedModal({ onClose, onSaved, editFeed }) {
   const { user, currentStoreId } = useAuth();
   const token = user?.token || localStorage.getItem("token");
 
-  const [step, setStep]               = useState(editFeed?.is_output_setup ? 2 : 1);
+  // const [step, setStep]               = useState(editFeed?.is_output_setup ? 2 : 1);
+  const [step, setStep] = useState(1);
   const [formats, setFormats]         = useState([]);
   const [loadingFmts, setLoadingFmts] = useState(true);
   const [saving, setSaving]           = useState(false);
@@ -146,7 +147,9 @@ function FeedModal({ onClose, onSaved, editFeed }) {
         ? `${API_BASE}/api/output-feeds/${editFeed._id}`
         : `${API_BASE}/api/output-feeds`;
       const method = editFeed ? "PUT" : "POST";
-      const res    = await fetch(url, { method, headers, body: JSON.stringify(form) });
+      // const { format_subtype_currency, ...formWithoutCurrency } = form; // ← currency தனியா எடு
+      // const res    = await fetch(url, { method, headers, body: JSON.stringify(formWithoutCurrency) });
+      const res = await fetch(url, { method, headers, body: JSON.stringify(form) });
       const data   = await res.json();
       if (!data.success) throw new Error(data.message);
       setSavedFeed(data.data);
@@ -500,6 +503,8 @@ export default function OutputFeed() {
 
   async function handleRefresh(feed) {
     setRefreshing(prev => ({ ...prev, [feed._id]: true }));
+    // console.log('🔄 Refreshing feed:', feed._id);
+    // return false;
     try {
       const res  = await fetch(
         `${API_BASE}/api/output-feeds/${feed._id}/build`,

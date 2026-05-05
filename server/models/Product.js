@@ -21,7 +21,8 @@ const ProductSchema = new mongoose.Schema(
     was_price:       {type: Number,default: null,set: (v) => {const parsed = parseFloat(v);return isNaN(parsed) ? null : parsed;}},
     stock:           { type: Number, default: null },
     quantity:        { type: Number, default: null },
-    product_url:    { type: String, default: null },
+    product_url:     { type: String, default: null },
+    product_image:   { type: String, default: null },
 
     // ─── DESCRIPTIONS  
     description:       { type: String, default: null },
