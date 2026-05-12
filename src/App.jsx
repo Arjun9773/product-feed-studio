@@ -20,6 +20,7 @@ import KeywordOptimization from "@/pages/KeywordOptimization";
 import CustomLabels from "@/pages/CustomLabels";
 import NotFound from "@/pages/NotFound";
 import Settings from "./pages/Settings";
+import CampaignFlow from "./pages/Campaign";
 
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const App = () => (
               <Route path="/custom-labels" element={<CustomLabels />} />
               <Route path="/keyword-optimization" element={<KeywordOptimization />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/campaign" element={<CampaignFlow />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

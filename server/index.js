@@ -6,6 +6,8 @@ const cronRoutes       = require('./routes/cronRoutes');
 const path = require('path');
 const aiRoutes = require('./routes/tenant/ai');
 const keywordsRouter = require('./routes/tenant/keywords');
+const oauthRoutes = require("./routes/oauth");
+const campaignsRouter = require("./routes/campaigns");
 
 const app = express();
 
@@ -20,6 +22,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use("/api/auth", oauthRoutes);
 app.use('/api/products', require('./routes/tenant/products'));
 app.use('/api/feeds', require('./routes/tenant/feeds'));
 app.use('/api/audit', require('./routes/tenant/audit'));
@@ -31,6 +34,7 @@ app.use('/api/google-categories', require('./routes/tenant/googleCategories'));
 app.use('/api/cron', cronRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/keywords', keywordsRouter);
+app.use("/api/campaigns", campaignsRouter);
 
 app.post('/api/test-signup', (req, res) => res.json({ ok: true, body: req.body }));
 app.get('/', (req, res) => res.json({ message: 'Product Feed Studio API running' }));

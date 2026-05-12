@@ -1,13 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import {
   Plus, RefreshCw, Edit, Trash2, FileOutput, Package,
   Globe, AlertCircle, X, Copy, Check, Loader2, ExternalLink,
-  ShieldCheck, Download,
+  ShieldCheck, Download, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
+import { useAuditFields } from "@/hooks/useAuditFields";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -64,32 +66,164 @@ function CopyButton({ url }) {
       title="Copy URL"
     >
       {copied ? (
-        <>
-          <Check size={12} className="text-success" /> Copied!
-        </>
+        <><Check size={12} className="text-success" /> Copied!</>
       ) : (
-        <>
-          <Copy size={12} /> Copy URL
-        </>
+        <><Copy size={12} /> Copy URL</>
       )}
     </button>
   );
 }
 
+// ── GMC Validation Warning Modal ───────────────────────────────
+function GmcWarningModal({ issues, onFixNow, onBuildAnyway, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        transition={{ duration: 0.15 }}
+        className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl p-6 space-y-4"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
+              <ShieldAlert className="h-5 w-5 text-warning" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">GMC Required Fields Missing</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Fix these before sending to Google Merchant Center
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-secondary"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Issues list */}
+        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+          {issues.map(issue => (
+            <div
+              key={issue.field}
+              className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-warning/5 border border-warning/20"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0" />
+                <span className="text-sm font-medium text-foreground">{issue.label}</span>
+              </div>
+              <Badge className="bg-warning/10 text-warning border-0 text-[10px]">
+                {issue.missingCount} missing
+              </Badge>
+            </div>
+          ))}
+        </div>
+
+        {/* Info note */}
+        <p className="text-xs text-muted-foreground bg-secondary/60 rounded-lg px-3 py-2 leading-relaxed">
+          Products missing these fields may be disapproved by Google Merchant Center.
+        </p>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-1">
+          <Button
+            className="flex-1 gap-2 bg-primary text-primary-foreground"
+            onClick={onFixNow}
+          >
+            Fix Now →
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 text-muted-foreground"
+            onClick={onBuildAnyway}
+          >
+            Build Anyway
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function BuildResultModal({ included, excluded, onFixNow, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        transition={{ duration: 0.15 }}
+        className="bg-card border border-border rounded-xl w-full max-w-sm shadow-2xl p-6 space-y-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-foreground">Feed Build Complete</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-secondary">
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Included */}
+        <div className="flex items-center gap-3 bg-success/10 rounded-xl px-4 py-3">
+          <Check className="h-5 w-5 text-success shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-success">{included} products included</p>
+            <p className="text-xs text-success/70">Successfully added to feed</p>
+          </div>
+        </div>
+
+        {/* Excluded — only if > 0 */}
+        {excluded > 0 && (
+          <div className="flex items-center gap-3 bg-warning/10 rounded-xl px-4 py-3">
+            <AlertCircle className="h-5 w-5 text-warning shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-warning">{excluded} products excluded</p>
+              <p className="text-xs text-warning/70">Missing required fields</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Close
+          </Button>
+          {excluded > 0 && (
+            <Button className="flex-1 gap-2" onClick={onFixNow}>
+              Fix Now <span>→</span>
+            </Button>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── 2-Step Feed Modal ──────────────────────────────────────────
-function FeedModal({ onClose, onSaved, editFeed }) {
+function FeedModal({ onClose, onSaved, editFeed, gmcRequiredFields }) {
   const { user, currentStoreId } = useAuth();
+  const navigate = useNavigate();
   const token = user?.token || localStorage.getItem("token");
 
-  // const [step, setStep]               = useState(editFeed?.is_output_setup ? 2 : 1);
-  const [step, setStep] = useState(1);
-  const [formats, setFormats]         = useState([]);
-  const [loadingFmts, setLoadingFmts] = useState(true);
-  const [saving, setSaving]           = useState(false);
-  const [building, setBuilding]       = useState(false);
-  const [savedFeed, setSavedFeed]     = useState(editFeed || null);
-  const [publicUrl, setPublicUrl]     = useState(editFeed?.output_public_url || "");
-  const [error, setError]             = useState("");
+  const [step, setStep]                 = useState(1);
+  const [formats, setFormats]           = useState([]);
+  const [loadingFmts, setLoadingFmts]   = useState(true);
+  const [saving, setSaving]             = useState(false);
+  const [building, setBuilding]         = useState(false);
+  const [validating, setValidating]     = useState(false);
+  const [savedFeed, setSavedFeed]       = useState(editFeed || null);
+  const [publicUrl, setPublicUrl]       = useState(editFeed?.output_public_url || "");
+  const [error, setError]               = useState("");
+  const [gmcIssues, setGmcIssues]       = useState([]);
+  const [showGmcModal, setShowGmcModal] = useState(false);
+
+  const [buildResult,     setBuildResult]     = useState(null);
+  const [showBuildResult, setShowBuildResult] = useState(false);
 
   const [form, setForm] = useState({
     output_format_id:        editFeed?.output_format_id        ?? "",
@@ -147,9 +281,7 @@ function FeedModal({ onClose, onSaved, editFeed }) {
         ? `${API_BASE}/api/output-feeds/${editFeed._id}`
         : `${API_BASE}/api/output-feeds`;
       const method = editFeed ? "PUT" : "POST";
-      // const { format_subtype_currency, ...formWithoutCurrency } = form; // ← currency தனியா எடு
-      // const res    = await fetch(url, { method, headers, body: JSON.stringify(formWithoutCurrency) });
-      const res = await fetch(url, { method, headers, body: JSON.stringify(form) });
+      const res    = await fetch(url, { method, headers, body: JSON.stringify(form) });
       const data   = await res.json();
       if (!data.success) throw new Error(data.message);
       setSavedFeed(data.data);
@@ -162,8 +294,36 @@ function FeedModal({ onClose, onSaved, editFeed }) {
     }
   }
 
+  // ── GMC Validate then Build ────────────────────────────────
+  async function validateAndBuild() {
+    if (!savedFeed) return;
+    setValidating(true);
+    setError("");
+    try {
+      const res  = await fetch(`${API_BASE}/api/products/gmc-validation`, { headers });
+      const data = await res.json();
+
+      
+      const issues = (data.issues || []).filter(i =>
+        gmcRequiredFields.includes(i.field)
+      );
+
+      if (issues.length > 0) {
+        setGmcIssues(issues);
+        setShowGmcModal(true); // warning modal 
+        return;
+      }
+    } catch {
+      // Validation API fail
+    } finally {
+      setValidating(false);
+    }
+    handleBuild(); // issues 
+  }
+
   async function handleBuild() {
     if (!savedFeed) return;
+    setShowGmcModal(false);
     setBuilding(true);
     setError("");
     try {
@@ -172,10 +332,15 @@ function FeedModal({ onClose, onSaved, editFeed }) {
         { method: "POST", headers }
       );
       const data = await res.json();
+
+      // console.log("BUILD RESPONSE:", data);
+
       if (!data.success) throw new Error(data.message);
       setSavedFeed(data.data);
       setPublicUrl(data.publicUrl || data.data.output_public_url || "");
       onSaved(data.data);
+      setBuildResult({ included: data.data.products_total, excluded: data.excludedCount || 0 });
+      setShowBuildResult(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -190,282 +355,289 @@ function FeedModal({ onClose, onSaved, editFeed }) {
   const ext = selectedFmt?.feed_format || "xml";
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        transition={{ duration: 0.15 }}
-        className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
+    <>
+      {/* GMC Warning Modal */}
+      <AnimatePresence>
+        {showGmcModal && (
+          <GmcWarningModal
+            issues={gmcIssues}
+            onFixNow={() => {
+              setShowGmcModal(false);
+              onClose();
+              navigate('/field-optimization', {
+                state: { field: gmcIssues[0]?.field }
+              });
+            }}
+            onBuildAnyway={() => {
+              setShowGmcModal(false);
+              handleBuild();
+            }}
+            onClose={() => setShowGmcModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+      {showBuildResult && buildResult && (
+        <BuildResultModal
+          included={buildResult.included}
+          excluded={buildResult.excluded}
+          onClose={() => setShowBuildResult(false)}
+          onFixNow={() => {
+            setShowBuildResult(false);
+            onClose();
+            navigate('/field-optimization');
+          }}
+        />
+      )}
+    </AnimatePresence>
+
+      {/* Feed Modal */}
+      <div
+        className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        onClick={onClose}
       >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
-          <h2 className="text-base font-semibold text-foreground">New Feed Settings</h2>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer border-none bg-transparent p-1 rounded-md hover:bg-secondary"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Section 1: Feed Settings */}
-        <div>
-          <div className="px-6 py-3 bg-secondary/80 border-b border-border">
-            <p className="text-sm font-semibold text-foreground">Feed Settings</p>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.15 }}
+          className="bg-card border border-border rounded-xl w-full max-w-lg shadow-2xl overflow-hidden"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Modal Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
+            <h2 className="text-base font-semibold text-foreground">New Feed Settings</h2>
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer border-none bg-transparent p-1 rounded-md hover:bg-secondary"
+            >
+              <X size={16} />
+            </button>
           </div>
 
-          {step === 1 ? (
-            <div className="px-6 py-5 space-y-5">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Give your feed a name and tell us what type of output channel you require.
-              </p>
+          {/* Section 1: Feed Settings */}
+          <div>
+            <div className="px-6 py-3 bg-secondary/80 border-b border-border">
+              <p className="text-sm font-semibold text-foreground">Feed Settings</p>
+            </div>
 
-              {/* Feed format */}
-              <div className="flex items-center gap-4">
-                <label className="text-sm text-foreground w-36 shrink-0">
-                  Feed format :
-                </label>
-                {loadingFmts ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 size={13} className="animate-spin" /> Loading formats...
-                  </div>
-                ) : (
-                  <select
-                    value={form.output_format_id}
-                    onChange={e => handleFormatChange(e.target.value)}
-                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
-                  >
-                    {formats.map(f => (
-                      <option key={f.feed_id} value={f.feed_id}>
-                        {f.feed_name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Feed name */}
-              <div className="flex items-center gap-4">
-                <label className="text-sm text-foreground w-36 shrink-0">
-                  Feed name :
-                </label>
-                <input
-                  type="text"
-                  value={form.output_feed_name}
-                  onChange={e => setForm(prev => ({ ...prev, output_feed_name: e.target.value }))}
-                  className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring"
-                />
-              </div>
-
-              {/* Column header — CSV only */}
-              {isCSV && (
-                <div className="flex items-center gap-4">
-                  <label className="text-sm text-foreground w-36 shrink-0">
-                    Column header :
-                  </label>
-                  <select
-                    value={form.is_header === "1" ? "Yes" : "No"}
-                    onChange={e =>
-                      setForm(prev => ({
-                        ...prev,
-                        is_header: e.target.value === "Yes" ? "1" : "0",
-                      }))
-                    }
-                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
-                  >
-                    <option>Yes</option>
-                    <option>No</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Text qualifier — CSV only */}
-              {isCSV && (
-                <div className="flex items-center gap-4">
-                  <label className="text-sm text-foreground w-36 shrink-0">
-                    Text qualifier :
-                  </label>
-                  <select
-                    value={form.op_text_qualifier}
-                    onChange={e =>
-                      setForm(prev => ({ ...prev, op_text_qualifier: e.target.value }))
-                    }
-                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
-                  >
-                    {TEXT_QUALIFIERS.map(q => (
-                      <option key={q.value} value={q.value}>
-                        {q.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Currency */}
-              <div className="flex items-center gap-4">
-                <label className="text-sm text-foreground w-36 shrink-0">
-                  Currency :
-                </label>
-                <select
-                  value={form.format_subtype_currency}
-                  onChange={e =>
-                    setForm(prev => ({ ...prev, format_subtype_currency: e.target.value }))
-                  }
-                  className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
-                >
-                  {CURRENCIES.map(c => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              {error && (
-                <p className="text-xs text-destructive flex items-center gap-1.5">
-                  <AlertCircle size={13} />
-                  {error}
+            {step === 1 ? (
+              <div className="px-6 py-5 space-y-5">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Give your feed a name and tell us what type of output channel you require.
                 </p>
-              )}
 
-              <div className="flex justify-end pt-1">
-                <button
-                  onClick={handleSaveAndContinue}
-                  disabled={saving || loadingFmts}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-info text-white text-sm font-medium cursor-pointer border-none hover:opacity-90 disabled:opacity-60 transition-all"
-                >
-                  {saving && <Loader2 size={14} className="animate-spin" />}
-                  {saving ? "Saving..." : "Save & Continue"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="px-6 py-3 flex items-center gap-2 text-xs text-success">
-              <Check size={14} className="shrink-0" />
-              Feed settings saved —
-              <span className="font-medium">{savedFeed?.output_feed_name}</span>
-              <span className="font-mono text-muted-foreground uppercase text-[10px]">
-                ({ext})
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Section 2: Hosting */}
-        <div className="border-t border-border">
-          <div className="px-6 py-3 bg-secondary/80 border-b border-border">
-            <p className="text-sm font-semibold text-foreground">Hosting</p>
-          </div>
-
-          {step === 2 ? (
-            <div className="px-6 py-5 space-y-5">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Finally, choose how we should host your feed.
-              </p>
-
-              {/* Feed filename */}
-              <div className="flex items-center gap-4">
-                <label className="text-sm text-foreground w-36 shrink-0">
-                  Feed filename:
-                </label>
-                <div className="flex-1 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={previewFilename.replace(`.${ext}`, "")}
-                    readOnly
-                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary/40 text-foreground outline-none cursor-default"
-                  />
-                  <span className="text-sm text-muted-foreground border border-border rounded-lg px-3 py-2 bg-secondary whitespace-nowrap">
-                    .{ext}
-                  </span>
-                </div>
-              </div>
-
-              {/* Feed URL */}
-              <div className="flex items-start gap-4">
-                <label className="text-sm text-foreground w-36 shrink-0 pt-2">
-                  Feed URL:
-                </label>
-                <div className="flex-1 space-y-2">
-                  <input
-                    type="text"
-                    value={publicUrl || previewUrl}
-                    readOnly
-                    className="w-full border border-border rounded-lg px-3 py-2 text-xs bg-secondary/40 text-foreground outline-none font-mono cursor-default"
-                  />
-                  {publicUrl && (
-                    <div className="flex items-center gap-2">
-                      <CopyButton url={publicUrl} />
-                      <a
-                        href={publicUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-border bg-secondary hover:bg-accent transition-colors text-foreground"
-                      >
-                        <ExternalLink size={12} />
-                        Open
-                      </a>
+                {/* Feed format */}
+                <div className="flex items-center gap-4">
+                  <label className="text-sm text-foreground w-36 shrink-0">Feed format :</label>
+                  {loadingFmts ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 size={13} className="animate-spin" /> Loading formats...
                     </div>
+                  ) : (
+                    <select
+                      value={form.output_format_id}
+                      onChange={e => handleFormatChange(e.target.value)}
+                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
+                    >
+                      {formats.map(f => (
+                        <option key={f.feed_id} value={f.feed_id}>{f.feed_name}</option>
+                      ))}
+                    </select>
                   )}
                 </div>
-              </div>
 
-              {error && (
-                <p className="text-xs text-destructive flex items-center gap-1.5">
-                  <AlertCircle size={13} />
-                  {error}
-                </p>
-              )}
-
-              {savedFeed?.is_output_setup === 1 && publicUrl && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-xs text-success">
-                  <Check size={13} />
-                  Feed built! {savedFeed?.products_total} products included.
+                {/* Feed name */}
+                <div className="flex items-center gap-4">
+                  <label className="text-sm text-foreground w-36 shrink-0">Feed name :</label>
+                  <input
+                    type="text"
+                    value={form.output_feed_name}
+                    onChange={e => setForm(prev => ({ ...prev, output_feed_name: e.target.value }))}
+                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring"
+                  />
                 </div>
-              )}
 
-              {savedFeed?.is_output_setup !== 1 && (
-                <div className="flex justify-start">
+                {/* Column header — CSV only */}
+                {isCSV && (
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm text-foreground w-36 shrink-0">Column header :</label>
+                    <select
+                      value={form.is_header === "1" ? "Yes" : "No"}
+                      onChange={e => setForm(prev => ({ ...prev, is_header: e.target.value === "Yes" ? "1" : "0" }))}
+                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
+                    >
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Text qualifier — CSV only */}
+                {isCSV && (
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm text-foreground w-36 shrink-0">Text qualifier :</label>
+                    <select
+                      value={form.op_text_qualifier}
+                      onChange={e => setForm(prev => ({ ...prev, op_text_qualifier: e.target.value }))}
+                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
+                    >
+                      {TEXT_QUALIFIERS.map(q => (
+                        <option key={q.value} value={q.value}>{q.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Currency */}
+                <div className="flex items-center gap-4">
+                  <label className="text-sm text-foreground w-36 shrink-0">Currency :</label>
+                  <select
+                    value={form.format_subtype_currency}
+                    onChange={e => setForm(prev => ({ ...prev, format_subtype_currency: e.target.value }))}
+                    className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary text-foreground outline-none focus:border-ring cursor-pointer"
+                  >
+                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+
+                {error && (
+                  <p className="text-xs text-destructive flex items-center gap-1.5">
+                    <AlertCircle size={13} />{error}
+                  </p>
+                )}
+
+                <div className="flex justify-end pt-1">
                   <button
-                    onClick={handleBuild}
-                    disabled={building}
+                    onClick={handleSaveAndContinue}
+                    disabled={saving || loadingFmts}
                     className="flex items-center gap-2 px-5 py-2 rounded-lg bg-info text-white text-sm font-medium cursor-pointer border-none hover:opacity-90 disabled:opacity-60 transition-all"
                   >
-                    {building && <Loader2 size={14} className="animate-spin" />}
-                    {building ? "Building feed..." : "Save feed"}
+                    {saving && <Loader2 size={14} className="animate-spin" />}
+                    {saving ? "Saving..." : "Save & Continue"}
                   </button>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="px-6 py-4">
-              <p className="text-xs text-muted-foreground">
-                Complete Feed Settings above to configure hosting.
-              </p>
-            </div>
-          )}
-        </div>
+              </div>
+            ) : (
+              <div className="px-6 py-3 flex items-center gap-2 text-xs text-success">
+                <Check size={14} className="shrink-0" />
+                Feed settings saved —
+                <span className="font-medium">{savedFeed?.output_feed_name}</span>
+                <span className="font-mono text-muted-foreground uppercase text-[10px]">({ext})</span>
+              </div>
+            )}
+          </div>
 
-        {/* Modal Footer */}
-        <div className="flex justify-end px-6 py-4 border-t border-border bg-card">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium cursor-pointer border-none hover:opacity-90 transition-all"
-          >
-            Close
-          </button>
-        </div>
-      </motion.div>
-    </div>
+          {/* Section 2: Hosting */}
+          <div className="border-t border-border">
+            <div className="px-6 py-3 bg-secondary/80 border-b border-border">
+              <p className="text-sm font-semibold text-foreground">Hosting</p>
+            </div>
+
+            {step === 2 ? (
+              <div className="px-6 py-5 space-y-5">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Finally, choose how we should host your feed.
+                </p>
+
+                {/* Feed filename */}
+                <div className="flex items-center gap-4">
+                  <label className="text-sm text-foreground w-36 shrink-0">Feed filename:</label>
+                  <div className="flex-1 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={previewFilename.replace(`.${ext}`, "")}
+                      readOnly
+                      className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-secondary/40 text-foreground outline-none cursor-default"
+                    />
+                    <span className="text-sm text-muted-foreground border border-border rounded-lg px-3 py-2 bg-secondary whitespace-nowrap">
+                      .{ext}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Feed URL */}
+                <div className="flex items-start gap-4">
+                  <label className="text-sm text-foreground w-36 shrink-0 pt-2">Feed URL:</label>
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="text"
+                      value={publicUrl || previewUrl}
+                      readOnly
+                      className="w-full border border-border rounded-lg px-3 py-2 text-xs bg-secondary/40 text-foreground outline-none font-mono cursor-default"
+                    />
+                    {publicUrl && (
+                      <div className="flex items-center gap-2">
+                        <CopyButton url={publicUrl} />
+                        <a
+                          href={publicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-border bg-secondary hover:bg-accent transition-colors text-foreground"
+                        >
+                          <ExternalLink size={12} /> Open
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-xs text-destructive flex items-center gap-1.5">
+                    <AlertCircle size={13} />{error}
+                  </p>
+                )}
+
+                {/* {savedFeed?.is_output_setup === 1 && publicUrl && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-xs text-success">
+                    <Check size={13} />
+                    Feed built! {savedFeed?.products_total} products included.
+                  </div>
+                )} */}
+
+                {savedFeed?.is_output_setup !== 1 && (
+                  <div className="flex justify-start">
+                    {/* 👇 handleBuild → validateAndBuild */}
+                    <button
+                      onClick={validateAndBuild}
+                      disabled={building || validating}
+                      className="flex items-center gap-2 px-5 py-2 rounded-lg bg-info text-white text-sm font-medium cursor-pointer border-none hover:opacity-90 disabled:opacity-60 transition-all"
+                    >
+                      {(building || validating) && <Loader2 size={14} className="animate-spin" />}
+                      {validating ? "Checking GMC..." : building ? "Building feed..." : "Save feed"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="px-6 py-4">
+                <p className="text-xs text-muted-foreground">
+                  Complete Feed Settings above to configure hosting.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="flex justify-end px-6 py-4 border-t border-border bg-card">
+            <button
+              onClick={onClose}
+              className="px-5 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium cursor-pointer border-none hover:opacity-90 transition-all"
+            >
+              Close
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function OutputFeed() {
   const { user, currentStoreId, isSuperAdmin, activeShopName } = useAuth();
+  const navigate = useNavigate();
   const token = user?.token || localStorage.getItem("token");
 
   const [feeds, setFeeds]             = useState([]);
@@ -476,6 +648,13 @@ export default function OutputFeed() {
   const [refreshing, setRefreshing]   = useState({});
   const [deleting, setDeleting]       = useState({});
   const [downloading, setDownloading] = useState({});
+
+  // GMC required fields — API-லயே வருது, hard code இல்ல
+  const { fields: ALL_FIELDS } = useAuditFields();
+  const gmcRequiredFields = useMemo(
+    () => ALL_FIELDS.filter(f => f.gmc_required).map(f => f.field),
+    [ALL_FIELDS]
+  );
 
   const headers = {
     Authorization:  `Bearer ${token}`,
@@ -501,11 +680,29 @@ export default function OutputFeed() {
 
   useEffect(() => { fetchFeeds(); }, [currentStoreId]);
 
+  // ── Refresh with GMC validation ────────────────────────────
   async function handleRefresh(feed) {
     setRefreshing(prev => ({ ...prev, [feed._id]: true }));
-    // console.log('🔄 Refreshing feed:', feed._id);
-    // return false;
     try {
+      // GMC validation check
+      const valRes  = await fetch(`${API_BASE}/api/products/gmc-validation`, { headers });
+      const valData = await valRes.json();
+      const issues  = (valData.issues || []).filter(i =>
+        gmcRequiredFields.includes(i.field)
+      );
+
+      if (issues.length > 0) {
+        const issueText = issues.map(i => `• ${i.label}: ${i.missingCount} products missing`).join('\n');
+        const confirmed = window.confirm(
+          `⚠️ GMC Required Fields Missing (${issues.length})\n\n${issueText}\n\nRefresh anyway?`
+        );
+        if (!confirmed) {
+          setRefreshing(prev => ({ ...prev, [feed._id]: false }));
+          return;
+        }
+      }
+
+      // Existing refresh logic
       const res  = await fetch(
         `${API_BASE}/api/output-feeds/${feed._id}/build`,
         { method: "POST", headers }
@@ -521,32 +718,31 @@ export default function OutputFeed() {
     }
   }
 
- async function handleDownload(feed) {
-  if (!feed.output_public_url) return;
-  setDownloading(prev => ({ ...prev, [feed._id]: true }));
-  try {
-    // ✅ Fix - full URL இருந்தா direct use பண்ணு
-    const downloadUrl = feed.output_public_url.startsWith("http")
-      ? feed.output_public_url
-      : `${API_BASE}${feed.output_public_url}`;
+  async function handleDownload(feed) {
+    if (!feed.output_public_url) return;
+    setDownloading(prev => ({ ...prev, [feed._id]: true }));
+    try {
+      const downloadUrl = feed.output_public_url.startsWith("http")
+        ? feed.output_public_url
+        : `${API_BASE}${feed.output_public_url}`;
 
-    const res = await fetch(downloadUrl);
-    if (!res.ok) throw new Error("Download failed");
-    const blob = await res.blob();
-    const url  = window.URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = feed.output_filename || "feed";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setDownloading(prev => ({ ...prev, [feed._id]: false }));
+      const res = await fetch(downloadUrl);
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = feed.output_filename || "feed";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloading(prev => ({ ...prev, [feed._id]: false }));
+    }
   }
-}
 
   async function handleDelete(feedId) {
     if (!confirm("Are you sure you want to delete this feed?")) return;
@@ -615,6 +811,7 @@ export default function OutputFeed() {
             onClose={() => { setShowModal(false); setEditFeed(null); }}
             onSaved={handleSaved}
             editFeed={editFeed}
+            gmcRequiredFields={gmcRequiredFields}
           />
         )}
       </AnimatePresence>
@@ -651,10 +848,7 @@ export default function OutputFeed() {
             { label: "Delivery Methods", value: deliveryMethods, sub: "Feed delivery type",        icon: Globe,       color: "text-success", bg: "bg-success/10" },
             { label: "Pending Builds",   value: pendingBuilds,   sub: "Feeds not yet generated",   icon: AlertCircle, color: "text-warning", bg: "bg-warning/10" },
           ].map(({ label, value, sub, icon: Icon, color, bg }) => (
-            <div
-              key={label}
-              className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}
-            >
+            <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
               <div className={`p-2 rounded-lg ${bg}`}>
                 <Icon className={`h-5 w-5 ${color}`} />
               </div>
@@ -691,10 +885,7 @@ export default function OutputFeed() {
               <tbody>
                 {feeds.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={8}
-                      className="p-12 text-center text-muted-foreground text-sm"
-                    >
+                    <td colSpan={8} className="p-12 text-center text-muted-foreground text-sm">
                       No feeds yet. Click "Add New Feed" to create your first feed.
                     </td>
                   </tr>
@@ -709,37 +900,24 @@ export default function OutputFeed() {
                         key={feed._id}
                         className="border-b border-border last:border-0 hover:bg-secondary/30 transition-colors"
                       >
-                        {/* Feed Name */}
-                        <td className="p-4 font-medium text-foreground">
-                          {feed.output_feed_name}
-                        </td>
+                        <td className="p-4 font-medium text-foreground">{feed.output_feed_name}</td>
 
-                        {/* Format */}
                         <td className="p-4">
                           <span className="text-xs font-mono px-2 py-1 rounded bg-secondary text-muted-foreground uppercase">
                             {feed.output_format_id === 1 ? "xml" : "csv"}
                           </span>
                         </td>
 
-                        {/* Products */}
-                        <td className="p-4 text-foreground">
-                          {feed.products_total || 0}
-                        </td>
+                        <td className="p-4 text-foreground">{feed.products_total || 0}</td>
 
-                        {/* Delivery */}
                         <td className="p-4 text-foreground capitalize">
                           {feed.output_delivery_method || "http"}
                         </td>
 
-                        {/* Status */}
                         <td className="p-4">
-                          <StatusBadge
-                            status={feed.status}
-                            is_output_setup={feed.is_output_setup}
-                          />
+                          <StatusBadge status={feed.status} is_output_setup={feed.is_output_setup} />
                         </td>
 
-                        {/* Feed URL */}
                         <td className="p-4">
                           {feed.is_output_setup && feed.output_public_url ? (
                             <div className="flex items-center gap-2">
@@ -749,15 +927,13 @@ export default function OutputFeed() {
                               <CopyButton url={feed.output_public_url} />
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Not built yet
-                            </span>
+                            <span className="text-xs text-muted-foreground">Not built yet</span>
                           )}
                         </td>
 
-                        {/* Options — Refresh + Download */}
                         <td className="p-4">
                           <div className="flex gap-2">
+                            {/* Refresh — GMC validation இருக்கு */}
                             <Button
                               size="sm"
                               variant="outline"
@@ -765,11 +941,10 @@ export default function OutputFeed() {
                               onClick={() => handleRefresh(feed)}
                               className="gap-1 text-primary border-primary/30 hover:bg-primary/5"
                             >
-                              {isRefreshing ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-3 w-3" />
-                              )}
+                              {isRefreshing
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <RefreshCw className="h-3 w-3" />
+                              }
                               {isRefreshing ? "Refreshing..." : "Refresh"}
                             </Button>
 
@@ -781,18 +956,16 @@ export default function OutputFeed() {
                                 onClick={() => handleDownload(feed)}
                                 className="gap-1 text-success border-success/30 hover:bg-success/5"
                               >
-                                {isDownloading ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Download className="h-3 w-3" />
-                                )}
+                                {isDownloading
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <Download className="h-3 w-3" />
+                                }
                                 {isDownloading ? "Downloading..." : "Download"}
                               </Button>
                             )}
                           </div>
                         </td>
 
-                        {/* Actions — Edit + Delete */}
                         <td className="p-4">
                           <div className="flex gap-2">
                             <Button
@@ -809,11 +982,10 @@ export default function OutputFeed() {
                               className="gap-1 h-8"
                               onClick={() => handleDelete(feed._id)}
                             >
-                              {isDeleting ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3 w-3" />
-                              )}
+                              {isDeleting
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Trash2 className="h-3 w-3" />
+                              }
                               Delete
                             </Button>
                           </div>

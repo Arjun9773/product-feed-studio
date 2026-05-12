@@ -167,7 +167,7 @@ router.get('/fields', auth, tenantResolver, async (req, res) => {
 
     const fields = await FeedAuditIssue
       .find({ isActive: true })
-      .select('field label group priority status')
+      .select('field label group priority statusgmc_required')
       .lean();
 
     // Priority correct order-ல் sort

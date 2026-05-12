@@ -11,73 +11,31 @@ import { useAuth } from "@/context/AuthContext";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const PER_PAGE = 20;
 
-// ── Fields to skip (internal/system) ─────────────────────────
-const SKIP_FIELDS = new Set([
-  "_id", "__v", "feedId", "tenantId", "is_active",
-  "deactivatedAt", "importedAt", "updatedAt",
-  "title_optimization_status", "field_optimization_status",
-  "google_category_optimization_status",
-  "keyword_optimization_status",
-]);
-
-// ── Read-only (show but no edit) ──────────────────────────────
-const READONLY_FIELDS = new Set([
-  "sourceId", "item_code", "product_url", "products_url",
-]);
-
-// ── Image fields ──────────────────────────────────────────────
-const IMAGE_FIELDS = new Set([
-  "product_image",
-  "additional_image1", "additional_image2", "additional_image3",
-  "additional_image4", "additional_image5", "additional_image6",
-  "additional_image7", "additional_image8",
-]);
-
-// ── Pin these columns first ───────────────────────────────────
-const PIN_ORDER = [
-  "sourceId", "product_name", "brand", "price",
-  "category", "google_category", "color", "age_group",
-  "gender", "material", "gtin",
-];
-
-const COLUMN_CONFIG = {
-  active_keywords: { label: "Keywords" }
-};
-
-// ── Extract dynamic columns from first product ────────────────
-function extractColumns(products) {
-  if (!products.length) return [];
-  const allKeys = new Set();
-  products.forEach((p) => Object.keys(p).forEach((k) => allKeys.add(k)));
-
-  const visible = [...allKeys].filter((k) => !SKIP_FIELDS.has(k));
-
-  return visible.sort((a, b) => {
-    const ai = PIN_ORDER.indexOf(a);
-    const bi = PIN_ORDER.indexOf(b);
-    if (ai !== -1 && bi !== -1) return ai - bi;
-    if (ai !== -1) return -1;
-    if (bi !== -1) return 1;
-    return a.localeCompare(b);
-  });
-}
-
 // ── Pretty label ──────────────────────────────────────────────
 function fieldLabel(key) {
-  if (COLUMN_CONFIG[key]?.label) return COLUMN_CONFIG[key].label;
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ── Inline Editable Cell ──────────────────────────────────────
-function EditableCell({ product, fieldKey, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue]     = useState(product[fieldKey] ?? "");
-  const [status, setStatus]   = useState(null);
-  const [imgError, setImgError] = useState(false);
-  const inputRef              = useRef(null);
+// ── Extract columns from fieldConfig (backend controls order & visibility) ──
+function extractColumns(products, config) {
+  return config
+    .map((f) => f.key)
+    .filter((key) => products.some((p) => key in p));
+}
 
-  const isReadonly = READONLY_FIELDS.has(fieldKey);
-  const isImage    = IMAGE_FIELDS.has(fieldKey);
+// ── Inline Editable Cell ──────────────────────────────────────
+function EditableCell({ product, fieldKey, fieldConfig, onSave }) {
+  const [editing, setEditing]   = useState(false);
+  const [value, setValue]       = useState(product[fieldKey] ?? "");
+  const [status, setStatus]     = useState(null);
+  const [imgError, setImgError] = useState(false);
+  const inputRef                = useRef(null);
+
+  // All display logic comes from backend fieldConfig — no hardcode
+  const config     = fieldConfig.find((f) => f.key === fieldKey);
+  const isReadonly = config?.readonly ?? false;
+  const isImage    = config?.type === "image";
+  const isUrl      = config?.type === "url";
   const rawVal     = product[fieldKey];
   const isEmpty    = rawVal === null || rawVal === undefined || rawVal === "";
 
@@ -129,6 +87,26 @@ function EditableCell({ product, fieldKey, onSave }) {
     );
   }
 
+  // Url
+  if (isUrl) {
+    return (
+      <td className="p-3">
+        {rawVal ? (
+          <a
+            href={rawVal}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary text-xs underline hover:opacity-70"
+          >
+            View Product ↗
+          </a>
+        ) : (
+          <span className="text-destructive/70 text-xs">—</span>
+        )}
+      </td>
+    );
+  }
+
   // Editing
   if (editing) {
     return (
@@ -172,12 +150,13 @@ export default function FeedProductList() {
   const { user, currentStoreId, isSuperAdmin, activeShopName } = useAuth();
   const token = user?.token || localStorage.getItem("token");
 
-  const [products, setProducts] = useState([]);
-  const [columns, setColumns]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [search, setSearch]     = useState("");
-  const [page, setPage]         = useState(1);
+  const [products, setProducts]       = useState([]);
+  const [columns, setColumns]         = useState([]);
+  const [fieldConfig, setFieldConfig] = useState([]);  // ← backend-driven config
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
+  const [search, setSearch]           = useState("");
+  const [page, setPage]               = useState(1);
 
   const headers = {
     Authorization:  `Bearer ${token}`,
@@ -188,12 +167,18 @@ export default function FeedProductList() {
   async function fetchProducts() {
     if (!currentStoreId) { setLoading(false); return; }
     try {
-      setLoading(true); setError(null);
+      setLoading(true);
+      setError(null);
       const res  = await fetch(`${API_BASE}/api/products/with-keywords`, { headers });
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
-      setProducts(list);
-      setColumns(extractColumns(list));
+
+      const products    = Array.isArray(data.products)    ? data.products    : [];
+      const fieldConfig = Array.isArray(data.fieldConfig) ? data.fieldConfig : [];
+      setColumns(extractColumns(products, fieldConfig));
+
+      setProducts(products);
+      setFieldConfig(fieldConfig);
+      setColumns(extractColumns(products, fieldConfig));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -206,7 +191,8 @@ export default function FeedProductList() {
   const handleSave = useCallback(async (sourceId, field, value) => {
     try {
       const res = await fetch(`${API_BASE}/api/products/bulk-update`, {
-        method: "PUT", headers,
+        method: "PUT",
+        headers,
         body: JSON.stringify({ field, updates: [{ id: sourceId, value }] }),
       });
       const data = await res.json();
@@ -235,8 +221,8 @@ export default function FeedProductList() {
   const curPage   = Math.min(page, maxPage);
   const pageSlice = filtered.slice((curPage - 1) * PER_PAGE, curPage * PER_PAGE);
 
-  // Stats
-  const editableCols     = columns.filter((c) => !READONLY_FIELDS.has(c) && !IMAGE_FIELDS.has(c));
+  // Stats — fieldConfig-லிருந்து editable columns எடுக்கிறோம்
+  const editableCols     = fieldConfig.filter((f) => !f.readonly && f.type !== "image").map((f) => f.key);
   const uniqueCategories = [...new Set(products.map((p) => p.category).filter(Boolean))].length;
   const missingCount     = products.reduce((acc, p) =>
     acc + editableCols.filter((f) => p[f] === null || p[f] === undefined || p[f] === "").length, 0
@@ -282,10 +268,10 @@ export default function FeedProductList() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Products",     value: products.length,    sub: "In current feed",       icon: Package,       color: "text-primary",     bg: "bg-primary/10"     },
-          { label: "Feed Completeness",  value: `${completeness}%`, sub: "Overall data quality",  icon: ShieldCheck,   color: "text-info",        bg: "bg-info/10"        },
-          { label: "Categories",         value: uniqueCategories,   sub: "Product categories",    icon: LayoutGrid,    color: "text-success",     bg: "bg-success/10"     },
-          { label: "Missing Attributes", value: missingCount,       sub: "Fields needing data",   icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
+          { label: "Total Products",     value: products.length,    sub: "In current feed",      icon: Package,       color: "text-primary",     bg: "bg-primary/10"     },
+          { label: "Feed Completeness",  value: `${completeness}%`, sub: "Overall data quality", icon: ShieldCheck,   color: "text-info",        bg: "bg-info/10"        },
+          { label: "Categories",         value: uniqueCategories,   sub: "Product categories",   icon: LayoutGrid,    color: "text-success",     bg: "bg-success/10"     },
+          { label: "Missing Attributes", value: missingCount,       sub: "Fields needing data",  icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
         ].map(({ label, value, sub, icon: Icon, color, bg }) => (
           <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
             <div className={`p-2 rounded-lg ${bg}`}><Icon className={`h-5 w-5 ${color}`} /></div>
@@ -318,14 +304,18 @@ export default function FeedProductList() {
             <thead>
               <tr className="border-b border-border bg-secondary/50">
                 <th className="p-3 text-left text-muted-foreground font-medium w-10">#</th>
-                {columns.map((col) => (
-                  <th key={col} className="p-3 text-left text-muted-foreground font-medium whitespace-nowrap text-xs">
-                    {fieldLabel(col)}
-                    {!READONLY_FIELDS.has(col) && !IMAGE_FIELDS.has(col) && (
-                      <span className="ml-1 text-[9px] text-primary/40 font-normal">✎</span>
-                    )}
-                  </th>
-                ))}
+                {columns.map((col) => {
+                  const config = fieldConfig.find((f) => f.key === col);
+                  return (
+                    <th key={col} className="p-3 text-left text-muted-foreground font-medium whitespace-nowrap text-xs">
+                      {fieldLabel(col)}
+                      {/* Edit icon only for editable, non-image fields */}
+                      {!config?.readonly && config?.type !== "image" && (
+                        <span className="ml-1 text-[9px] text-primary/40 font-normal">✎</span>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -344,6 +334,7 @@ export default function FeedProductList() {
                         key={col}
                         product={product}
                         fieldKey={col}
+                        fieldConfig={fieldConfig}
                         onSave={handleSave}
                       />
                     ))}
@@ -366,10 +357,10 @@ export default function FeedProductList() {
             </Button>
             {Array.from({ length: Math.min(maxPage, 5) }, (_, i) => {
               let p;
-              if (maxPage <= 5)             p = i + 1;
-              else if (curPage <= 3)        p = i + 1;
+              if (maxPage <= 5)                p = i + 1;
+              else if (curPage <= 3)           p = i + 1;
               else if (curPage >= maxPage - 2) p = maxPage - 4 + i;
-              else                          p = curPage - 2 + i;
+              else                             p = curPage - 2 + i;
               return (
                 <Button key={p} size="sm" onClick={() => setPage(p)}
                   className={`h-8 min-w-[32px] ${curPage === p

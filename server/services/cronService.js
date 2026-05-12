@@ -31,7 +31,7 @@ const PROTECTED_FIELDS = [
 const FIELD_MAP = {
   stock:       'quantity',
   store_price: 'was_price',
-  product_url: 'products_url',
+  // product_url: 'products_url',
 };
 // ============================================
 // AUDIT ISSUE CACHE
@@ -359,7 +359,7 @@ async function importFeedForTenant(tenantId, feed) {
             ...product,
             gtin:          rawProduct.gtin || null,
             product_image: rawProduct.product_image || null,
-            products_url:  rawProduct.products_url || rawProduct.product_url || null,
+            product_url:  rawProduct.products_url || rawProduct.product_url || null,
             sourceId:      String(uniqueId),
             feedId:        String(feed._id),
             tenantId:      tenantId,

@@ -19,7 +19,7 @@ function csvEscape(str, qualifier = '') {
   return `${qualifier}${s.replace(new RegExp(qualifier, 'g'), `\\${qualifier}`)}${qualifier}`;
 }
 
-// ── DB internal fields — feed-ல் வரக்கூடாதவை ────────────────
+// ── DB internal fields  ────────────────
 const SKIP_FIELDS = new Set([
   '_id',
   '__v',
@@ -30,8 +30,33 @@ const SKIP_FIELDS = new Set([
   'deactivatedAt',
   'field_optimization_status',
   'title_optimization_status',
+  'keyword_optimization_status',
+  'google_category_optimization_status',
   'is_active',
+  'item_code',
 ]);
+
+// ── GMC Field Name Mapping ────────────────────────────────────
+const GMC_FIELD_MAP = {
+  sourceId:          'id',
+  product_name:      'title',
+  description:       'description',
+  product_url:       'link',
+  product_image:     'image_link',
+  price:             'price',
+  was_price:         'sale_price',
+  stock:             'availability',
+  brand:             'brand',
+  google_category:   'google_product_category',
+  ean_id:            'gtin',
+  color:             'color',
+  material:          'material',
+  pattern:           'pattern',
+  age_group:         'age_group',
+  gender:            'gender',
+  category:          'product_type',
+  additional_image1: 'additional_image_link',
+};
 
 // ── null / empty check ────────────────────────────────────────
 function isEmpty(val) {
@@ -43,29 +68,31 @@ function generateXML(products, feed) {
   const currency = feed.format_subtype_currency || 'INR';
   const tracking = feed.output_feed_tracking ? `?${feed.output_feed_tracking}` : '';
 
+  const specialFields = new Set([
+    'sourceId', 'product_name', 'description',
+    'product_url', 'stock', 'price', 'was_price',
+  ]);
+
   const items = products.map(p => {
     const price    = p.price != null ? `${p.price} ${currency}` : null;
     const wasPrice = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0
                    ? `${Number(p.was_price)} ${currency}` : null;
-    const avail    = p.stock > 0 ? 'in_stock' : 'out_of_stock';
+    // const avail    = p.stock > 0 ? 'in_stock' : 'out_of_stock';
+    const avail = p.stock > 0 ? 'in stock' : 'out of stock';
     const link     = (feed.output_link_text || p.product_url || '') + tracking;
     const title    = feed.output_title_text || p.product_name || '';
     const desc     = feed.output_desc_text  || p.description  || '';
 
-    // Special fields — already handled above, dynamic loop-ல் skip பண்ணணும்
-    const skipInDynamic = new Set([
-      'sourceId', 'product_name', 'description', 'product_url',
-      'stock', 'price', 'was_price',
-    ]);
-
-    // DB-ல் உள்ள மற்ற எல்லா fields-உம் dynamic-ஆ போகும்
     const dynamicTags = Object.entries(p)
       .filter(([key, val]) =>
         !SKIP_FIELDS.has(key) &&
-        !skipInDynamic.has(key) &&
+        !specialFields.has(key) &&
         !isEmpty(val)
       )
-      .map(([key, val]) => `<g:${key}>${escapeXml(String(val))}</g:${key}>`)
+      .map(([key, val]) => {
+        const mappedKey = GMC_FIELD_MAP[key] || key;
+        return `<g:${mappedKey}>${escapeXml(String(val))}</g:${mappedKey}>`;
+      })
       .join('\n      ');
 
     return `
@@ -102,7 +129,7 @@ function generateCSV(products, feed) {
                   : '';
   const q = (val) => csvEscape(String(val ?? ''), qualifier);
 
-  // ── எல்லா products-இல் இருந்தும் unique columns collect பண்ணு ──
+ 
   const allKeys = new Set();
   products.forEach(p => {
     Object.keys(p).forEach(key => {
@@ -110,26 +137,35 @@ function generateCSV(products, feed) {
     });
   });
 
-  // Fixed columns — இவை முதல்ல வரணும்
+ 
   const fixedCols = [
     'sourceId',
     'product_name',
     'description',
     'product_url',
+    'product_image',
     'additional_image1',
     'additional_image2',
     'additional_image3',
     'additional_image4',
     'additional_image5',
-    'additional_image6', // ✅ fixed
-    'additional_image7', // ✅ fixed
-    'additional_image8', // ✅ fixed
+    'additional_image6',
+    'additional_image7',
+    'additional_image8',
     'price',
     'was_price',
     'stock',
+    'brand',
+    'google_category',
+    'ean_id',
+    'color',
+    'material',
+    'pattern',
+    'age_group',
+    'gender',
+    'category',
   ];
 
-  // Fixed-ல் இல்லாத மற்றவை alphabetical order-ல்
   const remainingCols = [...allKeys]
     .filter(k => !fixedCols.includes(k))
     .sort();
@@ -139,6 +175,11 @@ function generateCSV(products, feed) {
     ...remainingCols,
   ];
 
+  // ── Header — GMC mapped name ──────────────────────────────
+  const headerRow = allCols
+    .map(k => GMC_FIELD_MAP[k] || k)
+    .join(',');
+
   // ── Rows ──────────────────────────────────────────────────
   const rows = products.map(p => {
     return allCols.map(key => {
@@ -146,22 +187,19 @@ function generateCSV(products, feed) {
       if (key === 'product_name') return q(feed.output_title_text || p.product_name || '');
       if (key === 'description')  return q(feed.output_desc_text  || p.description  || '');
       if (key === 'product_url')  return q((feed.output_link_text || p.product_url  || '') + tracking);
-      if (key === 'stock')        return q(p.stock > 0 ? 'in_stock' : 'out_of_stock');
+      if (key === 'stock')        return q(p.stock > 0 ? 'in stock' : 'out of stock');
       if (key === 'price')        return q(p.price != null ? `${p.price} ${currency}` : '');
       if (key === 'was_price') {
         const valid = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0;
         return q(valid ? `${Number(p.was_price)} ${currency}` : '');
       }
-
-      // Empty-ஆ இருந்தால் empty string
       if (isEmpty(p[key])) return q('');
-
       return q(String(p[key]));
     }).join(',');
   });
 
   const lines = feed.is_header === '1'
-    ? [allCols.join(','), ...rows]
+    ? [headerRow, ...rows]
     : rows;
 
   return lines.join('\n');
@@ -173,12 +211,22 @@ async function generateFeedFile({ tenantDb, feed }) {
   const ext    = fmt?.feed_format || 'xml';
   const folder = fmt?.feed_folder || 'gb';
 
-  // ✅ is_active: true — active products மட்டும்
-  const products = await tenantDb.collection('products')
-    .find({ is_active: true })
+  const products = await tenantDb
+    .collection('products')
+    .find({ 
+      is_active: true,
+      field_optimization_status: 'done'  
+    })
     .toArray();
 
-  console.log(`[FEED] Generating ${ext.toUpperCase()} for ${feed.cmpid} — ${products.length} active products`);
+    const excludedCount = await tenantDb
+    .collection('products')
+    .countDocuments({ 
+      is_active: true, 
+      field_optimization_status: { $ne: 'done' }
+    });
+
+  // console.log(`[FEED] Generating ${ext.toUpperCase()} for ${feed.cmpid} — ${products.length} active products`);
 
   let content;
   switch (ext) {
@@ -203,7 +251,7 @@ async function generateFeedFile({ tenantDb, feed }) {
   console.log(`[FEED] ✔ File saved: ${filePath}`);
   console.log(`[FEED] ✔ Public URL: ${publicUrl}`);
 
-  return { fileurl, filename, publicUrl, productCount: products.length };
+  return { fileurl, filename, publicUrl, productCount: products.length, excludedCount };
 }
 
 module.exports = { generateFeedFile };

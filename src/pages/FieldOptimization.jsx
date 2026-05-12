@@ -184,12 +184,19 @@ export default function FieldOptimization() {
   const [searchParams] = useSearchParams();
   const location       = useLocation();
 
-  const { fields: ALL_FIELDS, loading: fieldsLoading } = useAuditFields();
+  // const { fields: ALL_FIELDS, loading: fieldsLoading } = useAuditFields();
+  const { fields: auditFields, loading: fieldsLoading } = useAuditFields();
 
   // FIX 1: Apply EXCLUDE_FIELDS filter here so dropdown never shows them
   const VISIBLE_FIELDS = useMemo(
-    () => ALL_FIELDS.filter(f => !EXCLUDE_FIELDS.includes(f.field)),
-    [ALL_FIELDS]
+    () => auditFields.filter(f => !EXCLUDE_FIELDS.includes(f.field)),
+    [auditFields]
+  );
+
+  // FieldOptimization.jsx-ல இந்த ஒரு line சேர்க்கணும்
+  const GMC_REQUIRED_FIELDS = useMemo(
+    () => auditFields.filter(f => f.gmc_required).map(f => f.field),
+    [auditFields]
   );
 
   const FIELD_GROUPS = useMemo(() =>
@@ -281,16 +288,16 @@ export default function FieldOptimization() {
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   const filtered = products.filter(p => {
-    const ps           = productStates[p.sourceId];
-    const matchSearch  = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
-    const matchCat     = selectedCategory ? p.category === selectedCategory : true;
-    const matchBrand   = selectedBrand    ? p.brand    === selectedBrand    : true;
-    const matchTagging =
-      selectedTagging === "All"    ? true :
-      selectedTagging === "Tagged" ? ps?.value !== "" :
-                                     ps?.value === "" || ps?.value == null;
-    return matchSearch && matchCat && matchBrand && matchTagging;
-  });
+  const ps           = productStates[p.sourceId];
+  const matchSearch  = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
+  const matchCat     = selectedCategory ? p.category === selectedCategory : true;
+  const matchBrand   = selectedBrand    ? p.brand    === selectedBrand    : true;
+  const matchTagging =
+    selectedTagging === "All"    ? true :
+    selectedTagging === "Tagged" ? ps?.value !== "" :
+                                    ps?.value === "" || ps?.value == null;
+  return matchSearch && matchCat && matchBrand && matchTagging;
+});
 
   const filledCount = Object.values(productStates).filter(s => s.value !== "").length;
 
@@ -376,7 +383,7 @@ export default function FieldOptimization() {
   // ── Save all to DB ─────────────────────────────────────────
   const handleSaveAll = async () => {
     if (!selectedField) return;
-
+    const missingRequiredFields = GMC_REQUIRED_FIELDS.filter(f => f !== selectedField.field);
     const filled = Object.entries(productStates).filter(([, s]) => s.value !== "" && s.value != null);
     if (filled.length === 0) { toast.info("No values to save"); return; }
 

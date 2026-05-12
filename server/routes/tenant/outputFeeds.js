@@ -215,6 +215,7 @@ router.post('/:id/build', auth, tenantResolver, async (req, res) => {
       success:   true,
       data:      updatedFeed,
       publicUrl: publicUrl,
+      excludedCount: result.excludedCount,
     });
 
   } catch (err) {
