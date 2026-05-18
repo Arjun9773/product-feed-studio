@@ -314,7 +314,7 @@ router.post("/google/logout", (req, res) => {
 });
 
 router.get("/google/url", (req, res) => {
-  const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "39133083178-m343fm4egfh80igbvpepqtomapnj54na.apps.googleusercontent.com";
+  const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
   const REDIRECT_URI = `${process.env.BACKEND_URL || "http://localhost:5000"}/api/auth/google/callback`;
   const SCOPE = [
     "https://www.googleapis.com/auth/adwords",

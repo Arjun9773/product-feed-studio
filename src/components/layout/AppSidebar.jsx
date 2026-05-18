@@ -11,7 +11,9 @@ import {
   ChevronLeft,
   Rss,
   Tag,
-  Key,FileJson 
+  Key,
+  FileJson,
+  Target
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,7 @@ const navItems = [
   { title: "Google Category",    icon: FolderTree,      path: "/google-category" },
   { title: "Feed Product List",  icon: Package,         path: "/feed-products" },
   { title: "Output Feed",        icon: RssIcon,         path: "/output-feed" },
+  { title: "Campaign",           icon: Target,          path: "/campaign" },
   { title: "Settings",           icon: Settings,        path: "/settings" },
 ];
 
@@ -68,7 +71,7 @@ export function AppSidebar({ open, onToggle }) {
       </div>
 
       {/* Main Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-hidden">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
