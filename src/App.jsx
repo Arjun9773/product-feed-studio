@@ -21,7 +21,7 @@ import CustomLabels from "@/pages/CustomLabels";
 import NotFound from "@/pages/NotFound";
 import Settings from "./pages/Settings";
 import CampaignFlow from "./pages/Campaign";
-import CampaignDetails from "./pages/CampaignDetails";
+import CompetitorPriceIntelligence from "@/pages/CompetitorPriceIntelligence";
 
 
 const queryClient = new QueryClient();
@@ -56,8 +56,7 @@ const App = () => (
               <Route path="/keyword-optimization" element={<KeywordOptimization />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/campaign" element={<CampaignFlow />} />
-              <Route path="/campaign/:id" element={<CampaignDetails />} />
-
+              <Route path="/competitor-price" element={<CompetitorPriceIntelligence />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

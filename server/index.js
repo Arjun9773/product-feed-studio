@@ -1,4 +1,5 @@
 require("dotenv").config();
+require("express-session")
 const express = require("express");
 const cors = require("cors");
 const session = require("express-session");
@@ -9,9 +10,11 @@ const aiRoutes = require("./routes/tenant/ai");
 const keywordsRouter = require("./routes/tenant/keywords");
 const oauthRoutes = require("./routes/oauth");
 const campaignsRouter = require("./routes/campaigns");
-
+const integrationsRouter = require("./routes/integrations");
+const competitorPriceRouter = require("./routes/tenant/competitorPrice.route.js");
+ 
 const app = express();
-
+ 
 app.use(
   cors({
     origin: [
@@ -23,7 +26,7 @@ app.use(
   }),
 );
 app.use(express.json());
-
+ 
 // Session Middleware for OAuth
 app.use(
   session({
@@ -37,10 +40,10 @@ app.use(
     },
   }),
 );
-
-// Static files — 
+ 
+// Static files —
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
+ 
 // Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/auth", oauthRoutes);
@@ -57,16 +60,18 @@ app.use("/api/cron", cronRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/keywords", keywordsRouter);
 app.use("/api/campaigns", campaignsRouter);
-
+app.use("/api/integrations", integrationsRouter);
+app.use("/api/competitor-price", competitorPriceRouter);
+ 
 app.post("/api/test-signup", (req, res) =>
   res.json({ ok: true, body: req.body }),
 );
 app.get("/", (req, res) =>
   res.json({ message: "Product Feed Studio API running" }),
 );
-
+ 
 const PORT = process.env.PORT || 5000;
-
+ 
 connectDB().then(async () => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   const { initAllCrons } = require("./services/cronService");

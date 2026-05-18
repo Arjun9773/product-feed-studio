@@ -6,7 +6,7 @@ const Merchant = require('../../models/Merchant');
 const FeedAuditIssueSchema = require('../../models/FeedAuditIssue');
 
 const router = express.Router();
-const mongoose             = require('mongoose');
+const mongoose = require('mongoose');
 
 // ============================================
 // CONSTANTS
@@ -17,6 +17,14 @@ const PRIORITY_WEIGHTS = {
   low:    0.2,
   others: 0.1,
 };
+
+// Fixed denominator — worst case if ALL priority types
+// had 100% product coverage
+// 1.0 + 0.5 + 0.2 + 0.1 = 1.8
+const TOTAL_POSSIBLE_PENALTY = Object.values(PRIORITY_WEIGHTS).reduce(
+  (sum, w) => sum + w,
+  0
+);
 
 // ============================================
 // GET /api/audit/feed-audit
@@ -46,7 +54,9 @@ router.get('/feed-audit', auth, tenantResolver, async (req, res) => {
     const auditDocs = await auditCol.find({}).toArray();
 
     // ── Build issue map ──────────────────────────────
-    // issueMap[label] = { issue, priority, field, products }
+    // issueMap[label] = { issue, priority, field, productIds (Set) }
+    // ✅ Use Set to track unique sourceIds — prevents double counting
+    // when one product has multiple audit docs
     const issueMap = {};
 
     for (const doc of auditDocs) {
@@ -54,14 +64,14 @@ router.get('/feed-audit', auth, tenantResolver, async (req, res) => {
         const key = issue.label;
         if (!issueMap[key]) {
           issueMap[key] = {
-            issue:    key,
-            field:    issue.field,
-            priority: issue.priority,
-            field:    issue.field,   // ✅ field now kept
-            products: 0,
+            issue:      key,
+            field:      issue.field,
+            priority:   issue.priority,
+            productIds: new Set(), // ✅ unique product tracking
           };
         }
-        issueMap[key].products++;
+        // ✅ Add sourceId — duplicates automatically ignored by Set
+        issueMap[key].productIds.add(doc.sourceId);
       }
     }
 
@@ -69,12 +79,12 @@ router.get('/feed-audit', auth, tenantResolver, async (req, res) => {
     const grouped = { high: [], medium: [], low: [], others: [] };
 
     for (const item of Object.values(issueMap)) {
-      const pct = Math.round((item.products / totalProducts) * 100);
-      const entry = {
+      const uniqueCount = item.productIds.size; // ✅ unique product count
+      const pct         = Math.round((uniqueCount / totalProducts) * 100);
+      const entry       = {
         issue:      item.issue,
         field:      item.field,
-        field:      item.field,      // ✅ field included in response
-        products:   item.products,
+        products:   uniqueCount,
         percentage: `${pct}%`,
       };
 
@@ -93,20 +103,20 @@ router.get('/feed-audit', auth, tenantResolver, async (req, res) => {
     // ── Total issues count ───────────────────────────
     const totalIssues = Object.values(grouped).flat().length;
 
-    // ── Health score (severity-weighted) ────────────
-    let totalPenalty = 0;
-    let maxPenalty   = 0;
+    // ── Health score (industry-standard, absolute penalty) ──
+    let actualPenalty = 0;
 
     for (const item of Object.values(issueMap)) {
-      const weight   = PRIORITY_WEIGHTS[item.priority] ?? 0.1;
-      const coverage = item.products / totalProducts;
-      totalPenalty  += weight * coverage;
-      maxPenalty    += weight;
+      const weight      = PRIORITY_WEIGHTS[item.priority] ?? 0.1;
+      const uniqueCount = item.productIds.size; // ✅ use unique count here too
+      const coverage    = uniqueCount / totalProducts;
+      actualPenalty    += weight * coverage;
     }
 
-    const healthScore = maxPenalty === 0
-      ? 100
-      : Math.max(0, Math.round((1 - totalPenalty / maxPenalty) * 100));
+    const healthScore = Math.max(
+      0,
+      Math.round((1 - actualPenalty / TOTAL_POSSIBLE_PENALTY) * 100)
+    );
 
     return res.json({
       success: true,
@@ -155,6 +165,7 @@ router.post('/refresh', auth, tenantResolver, async (req, res) => {
 });
 
 const PRIORITY_ORDER = { high: 1, medium: 2, low: 3, others: 4 };
+
 // ============================================
 // GET /api/audit/fields
 // Feed audit issue definitions from DB
@@ -170,7 +181,6 @@ router.get('/fields', auth, tenantResolver, async (req, res) => {
       .select('field label group priority statusgmc_required')
       .lean();
 
-    // Priority correct order-ல் sort
     fields.sort((a, b) =>
       (PRIORITY_ORDER[a.priority] ?? 5) - (PRIORITY_ORDER[b.priority] ?? 5)
     );

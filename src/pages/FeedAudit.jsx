@@ -55,7 +55,7 @@ const PRIORITY_CONFIG = {
   },
 };
 
-// ✅ Dynamic icon map by field — no hardcoded issue label matching needed
+// ✅ Dynamic icon map by field
 const FIELD_ICONS = {
   color:              Tag,
   age_group:          Hash,
@@ -114,10 +114,13 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }) {
 function IssueRow({ issue, priority, totalProducts, onFix }) {
   const cfg = PRIORITY_CONFIG[priority];
 
-  // ✅ Use field to get icon — dynamic, no hardcoded label matching
   const IssueIcon = FIELD_ICONS[issue.field] ?? Hash;
 
-  const p          = Math.round((issue.products / (totalProducts || 1)) * 100);
+  // ✅ Fix — Math.min ensures never exceeds 100%
+  const p          = Math.min(
+    100,
+    Math.round((Math.min(issue.products, totalProducts) / (totalProducts || 1)) * 100)
+  );
   const isCritical = p === 100;
 
   return (
@@ -141,15 +144,14 @@ function IssueRow({ issue, priority, totalProducts, onFix }) {
         <div className="flex-1">
           <Progress value={p} className="h-1.5" />
         </div>
+        {/* ✅ Fix — p use பண்றோம், issue.percentage இல்ல */}
         <span className={`text-xs font-semibold w-10 text-right ${isCritical ? cfg.color : "text-warning"}`}>
-          {issue.percentage}
+          {`${p}%`}
         </span>
       </div>
 
       <div className="shrink-0">
-        {/* ✅ Pass issue.field directly — no ISSUE_TO_FIELD lookup needed */}
         <Button
-          // onClick={() => onFix(issue.field)}
           onClick={() => onFix(issue.field, issue.issue)}
           size="sm"
           variant={priority === "high" ? "destructive" : "outline"}
@@ -255,29 +257,10 @@ export default function FeedAudit() {
 
   const token = user?.token || localStorage.getItem('token');
 
-  // ----------------------------------------
-  // ✅ handleFix — receives field directly from issue.field
-  // No ISSUE_TO_FIELD lookup needed anymore
-  // ----------------------------------------
-  // function handleFix(field) {
-  //   if (field) {
-  //     navigate('/field-optimization', { state: { field } });
-  //   }
-  // }
   const FIELD_ROUTES = {
     google_category: '/google-category',
     proper_casing:   '/title-optimization',
   };
-
-  // function handleFix(field) {
-  //   if (!field) return;
-    
-  //   if (FIELD_ROUTES[field]) {
-  //     navigate(FIELD_ROUTES[field]);
-  //   } else {
-  //     navigate('/field-optimization', { state: { field } });
-  //   }
-  // }
 
   function handleFix(field, label) {
     if (!field) return;
@@ -314,18 +297,7 @@ export default function FeedAudit() {
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
 
-      const rawData = json.data;
-      const allIssuesList = Object.values(rawData.issues || {}).flat();
-      const maxProductCount = allIssuesList.length > 0
-        ? Math.max(...allIssuesList.map(i => i.products ?? 0))
-        : rawData.totalProducts;
-
-      const correctTotalProducts = Math.min(
-        rawData.totalProducts,
-        maxProductCount <= rawData.totalProducts ? rawData.totalProducts : maxProductCount
-      );
-
-      setData({ ...rawData, totalProducts: correctTotalProducts });
+      setData(json.data);
       setLastChecked(new Date());
 
     } catch (err) {
@@ -441,10 +413,10 @@ export default function FeedAudit() {
 
   const allIssues = Object.values(issues).flat();
 
-  // ✅ Quick wins uses issue.field directly
+  // ✅ Quick wins — frontend p calculation use பண்றோம்
   const quickWins = allIssues
-    .filter(i  => parseFloat(i.percentage) < 50)
-    .sort((a, b) => parseFloat(a.percentage) - parseFloat(b.percentage))
+    .filter(i => Math.min(100, Math.round((Math.min(i.products, totalProducts) / totalProducts) * 100)) < 50)
+    .sort((a, b) => a.products - b.products)
     .slice(0, 3);
 
   return (
@@ -545,29 +517,34 @@ export default function FeedAudit() {
             </Badge>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {quickWins.map((w, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 bg-success/5 border border-success/20 rounded-lg p-3"
-              >
-                <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{w.issue}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {w.products} {w.products === 1 ? 'product' : 'products'} · {w.percentage}
-                  </p>
-                </div>
-                {/* ✅ Pass w.field directly */}
-                <Button
-                  onClick={() => handleFix(w.field, w.issue)}
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs border-success/40 text-success hover:bg-success/10 shrink-0"
+            {quickWins.map((w, i) => {
+              const wp = Math.min(
+                100,
+                Math.round((Math.min(w.products, totalProducts) / totalProducts) * 100)
+              );
+              return (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 bg-success/5 border border-success/20 rounded-lg p-3"
                 >
-                  Fix
-                </Button>
-              </div>
-            ))}
+                  <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{w.issue}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {Math.min(w.products, totalProducts)} {w.products === 1 ? 'product' : 'products'} · {`${wp}%`}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleFix(w.field, w.issue)}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-success/40 text-success hover:bg-success/10 shrink-0"
+                  >
+                    Fix
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

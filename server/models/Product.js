@@ -68,6 +68,7 @@ const ProductSchema = new mongoose.Schema(
     field_optimization_status: { type: String, enum: ['pending', 'optimized', 'failed'], default: 'pending' },
     google_category_optimization_status: { type: String, enum: ['pending', 'done', 'failed'], default: 'pending' },
     keyword_optimization_status: { type: String, enum: ['pending', 'done', 'failed'], default: 'pending' },
+    Shopping_ads_scrape_status: { type: String, enum: ['pending', 'done', 'failed'], default: 'pending' },
   },
   {
     timestamps: false,

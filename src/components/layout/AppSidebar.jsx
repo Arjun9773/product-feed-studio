@@ -30,6 +30,7 @@ const navItems = [
   { title: "Output Feed",        icon: RssIcon,         path: "/output-feed" },
   { title: "Campaign",           icon: Target,          path: "/campaign" },
   { title: "Settings",           icon: Settings,        path: "/settings" },
+  
 ];
 
 export function AppSidebar({ open, onToggle }) {

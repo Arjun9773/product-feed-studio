@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import {
   Tag,
   Users,
@@ -21,7 +21,7 @@ import {
   X,
   MoreVertical,
   Circle,
-  CheckCircle2,
+  CheckCircle2,ChevronLeft
 } from "lucide-react";
 
 /**
@@ -43,11 +43,13 @@ import {
 
 export default function Campaign() {
   const { user, currentStoreId } = useAuth();
-  const navigate = useNavigate();
   const [screen, setScreen] = useState("loading");
   const [connectedData, setConnectedData] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  
+  
 
   // Check if user is connected to Google Ads
   useEffect(() => {
@@ -92,26 +94,25 @@ export default function Campaign() {
     checkConnection();
   }, [user?.userId]);
 
-  const fetchCampaigns = async () => {
-    if (!user?.userId || !currentStoreId) return;
-    try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const response = await fetch(`${API_URL}/campaigns/user/${user.userId}`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-          "x-tenant-id": currentStoreId,
-          "Content-Type": "application/json",
-        },
-      });
-      const data = await response.json();
-      if (data.success) {
-        setCampaigns(data.data);
-      }
-    } catch (error) {
-      console.error("Error fetching campaigns:", error);
+const fetchCampaigns = async () => {
+  if (!user?.userId || !currentStoreId) return;
+  try {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const response = await fetch(`${API_URL}/campaigns/user/${user.userId}`, {
+      headers: {
+        'Authorization': `Bearer ${user.token}`,
+        'x-tenant-id': currentStoreId,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    if (data.success) {
+      setCampaigns(data.data);
     }
-  };
+  } catch (error) {
+    console.error("Error fetching campaigns:", error);
+  }
+};
 
   if (loading) {
     return (
@@ -181,25 +182,24 @@ function ConnectScreen({ onConnect, user, currentStoreId }) {
   const [error, setError] = useState(null);
 
   const handleConnect = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const response = await fetch(
-        `${API_URL}/auth/google/url?state=${user.userId}:${currentStoreId}`,
-      );
-      const { url } = await response.json();
-      window.location.href = url;
-    } catch (err) {
-      setLoading(false);
-      setError("Failed to initiate Google authentication. Please try again.");
-    }
-  };
+  setLoading(true);
+  setError(null);
+  try {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const response = await fetch(
+      `${API_URL}/auth/google/url?state=${user.userId}:${currentStoreId}`
+    );
+    const { url } = await response.json();
+    window.location.href = url;
+  } catch (err) {
+    setLoading(false);
+    setError("Failed to initiate Google authentication. Please try again.");
+  }
+};
 
   return (
-    <div className="min-h-screen bg-background flex items-start justify-center px-4 pt-20">
-      <div className="bg-card rounded-lg shadow-sm border border-border max-w-lg w-full p-12 text-center">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="bg-card rounded-lg shadow-sm border border-border max-w-md w-full p-10 text-center">
         <div className="flex justify-center mb-6">
           <GoogleAdsLogo />
         </div>
@@ -243,6 +243,7 @@ function Dashboard({
   onDisconnect,
 }) {
   const [disconnecting, setDisconnecting] = useState(false);
+  const navigate = useNavigate();
 
   const handleDisconnect = async () => {
     if (!user?.userId) return;
@@ -263,8 +264,16 @@ function Dashboard({
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-8 py-12">
-        <div className="bg-card rounded-lg border border-border p-12">
+      <div className="max-w-5xl mx-auto px-6 py-10">
+        {/* ← ADD THIS BUTTON HERE */}
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back to Optimization Center
+        </button>
+        <div className="bg-card rounded-lg border border-border p-8">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
               <GoogleAdsLogo small />
@@ -286,7 +295,7 @@ function Dashboard({
           </div>
 
           {campaigns.length === 0 ? (
-            <div className="border-2 border-dashed border-border rounded-lg p-20 text-center">
+            <div className="border-2 border-dashed border-border rounded-lg p-12 text-center">
               <ShoppingBag
                 className="mx-auto text-muted-foreground mb-4"
                 size={40}
@@ -320,8 +329,7 @@ function Dashboard({
                 {campaigns.map((campaign) => (
                   <div
                     key={campaign._id}
-                    onClick={() => navigate(`/campaign/${campaign._id}`)}
-                    className="border border-border rounded-lg p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer"
+                    className="border border-border rounded-lg p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex-1">
                       <h3 className="text-sm font-medium text-foreground">
@@ -1240,8 +1248,7 @@ function SummaryStep({ data, user, currentStoreId, onPublish }) {
       const campaignPayload = {
         name: data.campaignName,
         objective: data.objective,
-        campaignType:
-          data.campaignType === "shopping" ? "Shopping" : data.campaignType,
+        campaignType: data.campaignType === "shopping" ? "Shopping" : data.campaignType,
         merchantCenterId: data.merchantAccount?.split(" ")?.[0],
         merchantCenterName: data.merchantAccount,
         budget: parseFloat(data.budgetAmount) || 0,
@@ -1590,3 +1597,11 @@ function GoogleG() {
 function titleCase(s) {
   return String(s).charAt(0).toUpperCase() + String(s).slice(1);
 }
+
+<button
+  onClick={() => navigate(-1)}
+  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+>
+  <ChevronLeft className="h-4 w-4" />
+  Back to Optimization Center
+</button>
