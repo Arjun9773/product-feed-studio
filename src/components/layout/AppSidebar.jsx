@@ -27,6 +27,7 @@ const navItems = [
   { title: "Feed Product List",  icon: Package,         path: "/feed-products" },
   { title: "Output Feed",        icon: RssIcon,         path: "/output-feed" },
   { title: "Settings",           icon: Settings,        path: "/settings" },
+  
 ];
 
 export function AppSidebar({ open, onToggle }) {
@@ -68,7 +69,7 @@ export function AppSidebar({ open, onToggle }) {
       </div>
 
       {/* Main Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-hidden">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (

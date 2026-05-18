@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import {
   Tag,
   Users,
@@ -20,7 +21,7 @@ import {
   X,
   MoreVertical,
   Circle,
-  CheckCircle2,
+  CheckCircle2,ChevronLeft
 } from "lucide-react";
 
 /**
@@ -46,6 +47,9 @@ export default function Campaign() {
   const [connectedData, setConnectedData] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  
+  
 
   // Check if user is connected to Google Ads
   useEffect(() => {
@@ -239,6 +243,7 @@ function Dashboard({
   onDisconnect,
 }) {
   const [disconnecting, setDisconnecting] = useState(false);
+  const navigate = useNavigate();
 
   const handleDisconnect = async () => {
     if (!user?.userId) return;
@@ -260,6 +265,14 @@ function Dashboard({
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-6 py-10">
+        {/* ← ADD THIS BUTTON HERE */}
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back to Optimization Center
+        </button>
         <div className="bg-card rounded-lg border border-border p-8">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
@@ -1584,3 +1597,11 @@ function GoogleG() {
 function titleCase(s) {
   return String(s).charAt(0).toUpperCase() + String(s).slice(1);
 }
+
+<button
+  onClick={() => navigate(-1)}
+  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+>
+  <ChevronLeft className="h-4 w-4" />
+  Back to Optimization Center
+</button>
