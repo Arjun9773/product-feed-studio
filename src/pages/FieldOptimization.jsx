@@ -418,6 +418,8 @@ export default function FieldOptimization() {
   // ── AI Fill ────────────────────────────────────────────────
   const handleAiFill = async () => {
     if (!selectedField) return;
+
+      console.log('[AI] selectedField:', selectedField);
     setAiLoading(true);
     try {
       const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
@@ -428,7 +430,7 @@ export default function FieldOptimization() {
 
       const res = await API.post('/ai/fill-field', {
         products:   unfilled,
-        fieldLabel: selectedField.label,
+        fieldLabel: selectedField.field,
       });
 
       const updates = res.data?.data ?? [];
@@ -454,7 +456,7 @@ export default function FieldOptimization() {
     } catch {
       toast.error('AI fill failed');
     } finally {
-      setAiLoading(false);
+      setAiLoading(false);  
     }
   };
 

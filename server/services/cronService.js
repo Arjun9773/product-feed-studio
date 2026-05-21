@@ -39,13 +39,20 @@ const FIELD_MAP = {
 let cachedAuditIssues = null;
 async function getAuditIssues() {
   if (cachedAuditIssues) return cachedAuditIssues;
+
   const FeedAuditIssueModel =
-    mongoose.models?.FeedAuditIssue ||
-    mongoose.model('FeedAuditIssue', FeedAuditIssueSchema);
+    mongoose.connection.models?.FeedAuditIssue ||
+    mongoose.connection.model('FeedAuditIssue', FeedAuditIssueSchema);
+
   const issues = await FeedAuditIssueModel.find({ isActive: true }).lean();
-  console.log(`[AUDIT] DB: ${FeedAuditIssueModel.db.name}, found: ${issues.length}`);
+  console.log(`[AUDIT] DB: ${mongoose.connection.name}, found: ${issues.length}`);
+
+  if (issues.length === 0) {
+    console.warn('[AUDIT] ⚠ No audit issues found — check feedauditissues collection!');
+  }
+
   cachedAuditIssues = issues;
-  console.log(`[AUDIT] ✔ Loaded ${issues.length} audit issue definitions from DB`);
+  console.log(`[AUDIT] ✔ Loaded ${issues.length} audit issue definitions`);
   return cachedAuditIssues;
 }
 function clearAuditIssueCache() {

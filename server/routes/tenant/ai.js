@@ -2,12 +2,25 @@ const express = require('express');
 const axios   = require('axios');
 const auth    = require('../../middleware/auth');
 const tenantResolver = require('../../middleware/tenantResolver');
+const { getCategoryFromAI } = require('../../config/aiProvider');
 
 const router = express.Router();
+
+function getFieldExamples(fieldLabel) {
+  const examples = {
+    'Color':     '→ Black\n→ Silver\n→ White',
+    'Material':  '→ Plastic\n→ Metal\n→ Glass',
+    'Gender':    '→ Male\n→ Female\n→ Unisex',
+    'Age Group': '→ Adults\n→ Kids\n→ All Ages',
+    'Pattern':   '→ Solid\n→ Striped\n→ Printed',
+  };
+  return examples[fieldLabel] || '→ Extract directly from product name or category';
+}
 
 router.post('/fill-field', auth, tenantResolver, async (req, res) => {
   try {
     const { products, fieldLabel } = req.body;
+     console.log(`[AI] fieldLabel: "${fieldLabel}"`);
 
     if (!products?.length) {
       return res.status(400).json({ success: false, message: 'No products provided' });
@@ -16,51 +29,37 @@ router.post('/fill-field', auth, tenantResolver, async (req, res) => {
     const results = await Promise.all(
       products.map(async (product) => {
         try {
-          const prompt = `You are a product data specialist. Extract product attributes from the given details.
+         const prompt = `You are a product attribute extractor.
 
-Product Name: "${product.product_name || product.title || ''}"
-Brand: "${product.brand || ''}"
-Category: "${product.category || ''}"
-Price: "${product.price || ''}"
-Product URL: "${product.product_url || ''}"
+PRODUCT:
+- Name: "${product.product_name || ''}"
+- Brand: "${product.brand || ''}"
+- Category: "${product.category || ''}"
+- Price: "${product.price || ''}"
 
-Task: What is the "${fieldLabel}" for this product?
+TASK: Extract "${fieldLabel}" from the product details above.
 
-Examples of good responses:
-- Colour → "Black" or "Silver" or "White"
-- Size → "43 inches" or "XL" or "250ml"
-- Material → "Plastic" or "Cotton" or "Metal"
-- Gender → "Male" or "Female" or "Unisex"
-- Age Group → "Adults" or "Kids" or "All Ages"
+OUTPUT FORMAT:
+- Single value only (max 3 words)
+- No explanation, no punctuation, no extra text
+- If unknown, output: null
 
-Rules:
-- Return ONLY the value, nothing else
-- Extract from product name if possible
-- Maximum 3 words
-- If genuinely cannot determine, return: null
-- NEVER return "N/A", "Not available", "No ${fieldLabel}", "Unknown", "Not specified"`;
+EXAMPLES FOR "${fieldLabel}":
+${getFieldExamples(fieldLabel)}
 
-          const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-              model: 'openai/gpt-4o-mini',
-              messages: [{ role: 'user', content: prompt }]
-            },
-            {
-              headers: {
-                'Content-Type':  'application/json',
-                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              }
-            }
-          );
+YOUR ANSWER:`;
 
-          const raw = response.data?.choices?.[0]?.message?.content?.trim() || '';
+       
+          const raw = await getCategoryFromAI(prompt);
 
-          const isSentence    = raw.split(' ').length > 4;
-          const isPlaceholder = /^(null|n\/a|na|no\b|not\b|none|unknown|unspecified|undefined)/i.test(raw);
-          const value         = (isSentence || isPlaceholder) ? '' : raw;
+          console.log(`[AI] ${product.product_name} → raw: "${raw}"`);
 
-          console.log(`[AI] ${product.product_name} → raw: "${raw}" → final: "${value}"`);
+         const cleaned       = raw.replace(/^["']|["']$/g, '').trim();
+         const isSentence    = fieldLabel === 'description' ? false : cleaned.split(' ').length > 5;
+        const isPlaceholder = /^(null|n\/a|na|none|unknown|unspecified|undefined|no\s+description|no\s+info)/i.test(cleaned);
+         const value         = (isSentence || isPlaceholder) ? '' : cleaned;
+
+    
 
           return {
             id:     product.sourceId,
@@ -68,7 +67,8 @@ Rules:
             status: value ? 'filled' : 'unverified'
           };
 
-        } catch {
+        } catch (err) {
+          console.log('[AI] ERROR:', err.message);
           return { id: product.sourceId, value: '', status: 'unverified' };
         }
       })
