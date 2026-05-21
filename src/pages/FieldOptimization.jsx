@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ImageOff, Sparkles, Check, X, XCircle, Loader2,
   Pencil, MousePointerClick, Package, Layers,
-  CheckCircle2, AlertCircle
+  CheckCircle2, AlertCircle, Upload
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,72 @@ import { useAuditFields } from "@/hooks/useAuditFields";
 // ============================================================
 const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
 
-// FIX 1: EXCLUDE_FIELDS defined at top level so it's used in filtering
 const EXCLUDE_FIELDS = ['google_category', 'proper_casing'];
+
+// Image fields — these get file-upload + preview UI
+const IMAGE_FIELDS = ['additional_image', 'additional_image_link', 'image_link', 'image'];
+
+// ============================================================
+// IMAGE UPLOAD CELL
+// ============================================================
+function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
+  const hasPreview = !!state.inputVal;
+
+  return (
+    <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+      {/* Preview */}
+      {hasPreview && (
+        <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-border bg-secondary shrink-0">
+          <img
+            src={state.inputVal}
+            alt="preview"
+            className="w-full h-full object-cover"
+            onError={(e) => { e.target.src = ""; }}
+          />
+          <button
+            onClick={() => onInputChange("")}
+            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive flex items-center justify-center"
+          >
+            <X className="h-3 w-3 text-white" />
+          </button>
+        </div>
+      )}
+
+      {/* Upload button */}
+      <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-secondary px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-all w-fit">
+        <Upload className="h-3.5 w-3.5" />
+        <span>{hasPreview ? "Change Image" : "Upload Image"}</span>
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => onInputChange(reader.result);
+            reader.readAsDataURL(file);
+          }}
+        />
+      </label>
+
+      {/* Save / Cancel */}
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          className="h-7 text-xs gap-1 px-3"
+          onClick={onSave}
+          disabled={!state.inputVal}
+        >
+          <Check className="h-3 w-3" />Save
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================
 // PRODUCT ROW
@@ -30,6 +94,7 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
   const isUnverified = state?.status === 'unverified' && !isFilled;
   const isEditing    = state?.editing;
   const isDesc       = selectedField?.field === "description";
+  const isImage      = IMAGE_FIELDS.includes(selectedField?.field);
 
   return (
     <tr
@@ -92,43 +157,61 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
       {/* Field Value */}
       <td className="px-4 py-3 min-w-[200px]">
         {isEditing ? (
-          <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-            {isDesc ? (
-              <textarea
-                autoFocus
-                rows={4}
-                className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all leading-relaxed"
-                placeholder={`Enter ${selectedField.label}…`}
-                value={state.inputVal}
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.ctrlKey && state.inputVal.trim()) onSave();
-                  if (e.key === "Escape") onSelect();
-                }}
-              />
-            ) : (
-              <Input
-                autoFocus
-                className="h-9 text-sm bg-secondary border-border"
-                placeholder={`Enter ${selectedField.label}…`}
-                value={state.inputVal}
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && state.inputVal.trim()) onSave();
-                  if (e.key === "Escape") onSelect();
-                }}
-              />
-            )}
-            <div className="flex items-center gap-2">
-              <Button size="sm" className="h-7 text-xs gap-1 px-3" onClick={onSave} disabled={!state.inputVal.trim()}>
-                <Check className="h-3 w-3" />Save
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>Cancel</Button>
+          isImage ? (
+            <ImageUploadCell
+              state={state}
+              onInputChange={onInputChange}
+              onSave={onSave}
+              onSelect={onSelect}
+            />
+          ) : (
+            <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+              {isDesc ? (
+                <textarea
+                  autoFocus
+                  rows={4}
+                  className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all leading-relaxed"
+                  placeholder={`Enter ${selectedField.label}…`}
+                  value={state.inputVal}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey && state.inputVal.trim()) onSave();
+                    if (e.key === "Escape") onSelect();
+                  }}
+                />
+              ) : (
+                <Input
+                  autoFocus
+                  className="h-9 text-sm bg-secondary border-border"
+                  placeholder={`Enter ${selectedField.label}…`}
+                  value={state.inputVal}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && state.inputVal.trim()) onSave();
+                    if (e.key === "Escape") onSelect();
+                  }}
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="h-7 text-xs gap-1 px-3" onClick={onSave} disabled={!state.inputVal.trim()}>
+                  <Check className="h-3 w-3" />Save
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>Cancel</Button>
+              </div>
             </div>
-          </div>
+          )
         ) : isFilled ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">{state.value}</span>
+            {isImage ? (
+              <img
+                src={state.value}
+                alt="uploaded"
+                className="h-10 w-10 rounded-lg object-cover border border-border"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <span className="text-sm font-medium text-foreground">{state.value}</span>
+            )}
             <button
               onClick={onSelect}
               className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
@@ -147,13 +230,15 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
             onClick={onSelect}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors group"
           >
-            <MousePointerClick className="h-3.5 w-3.5" />
-            <span className="italic">Click to add</span>
+            {isImage
+              ? <><Upload className="h-3.5 w-3.5" /><span className="italic">Click to upload</span></>
+              : <><MousePointerClick className="h-3.5 w-3.5" /><span className="italic">Click to add</span></>
+            }
           </button>
         )}
       </td>
 
-      {/* FIX 4: Removed duplicate commented-out Status Badge <td> — only one clean block below */}
+      {/* Status */}
       <td className="px-4 py-3">
         {isFilled ? (
           <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
@@ -184,16 +269,13 @@ export default function FieldOptimization() {
   const [searchParams] = useSearchParams();
   const location       = useLocation();
 
-  // const { fields: ALL_FIELDS, loading: fieldsLoading } = useAuditFields();
   const { fields: auditFields, loading: fieldsLoading } = useAuditFields();
 
-  // FIX 1: Apply EXCLUDE_FIELDS filter here so dropdown never shows them
   const VISIBLE_FIELDS = useMemo(
     () => auditFields.filter(f => !EXCLUDE_FIELDS.includes(f.field)),
     [auditFields]
   );
 
-  // FieldOptimization.jsx-ல இந்த ஒரு line சேர்க்கணும்
   const GMC_REQUIRED_FIELDS = useMemo(
     () => auditFields.filter(f => f.gmc_required).map(f => f.field),
     [auditFields]
@@ -242,7 +324,6 @@ export default function FieldOptimization() {
     setSelectedField(VISIBLE_FIELDS[0]);
   }, [VISIBLE_FIELDS]);
 
-  // ── Re-sync when FeedAudit Fix button navigates here ──────
   useEffect(() => {
     if (VISIBLE_FIELDS.length === 0) return;
     const navField = location.state?.field;
@@ -256,8 +337,6 @@ export default function FieldOptimization() {
     if (!currentStoreId || !selectedField) return;
     setLoading(true);
     try {
-      // FIX 2: Removed location.state?.label — it was never passed and always ''
-      // Now only `field` is sent, which is what the API actually needs
       const res = await API.get(
         `/products/missing-field?field=${selectedField.field}`
       );
@@ -270,7 +349,7 @@ export default function FieldOptimization() {
           value:    p[selectedField.field] || "",
           editing:  false,
           inputVal: "",
-          status:   null, // FIX 3: initialise status so clear works correctly
+          status:   null,
         };
       });
       setProductStates(states);
@@ -288,16 +367,16 @@ export default function FieldOptimization() {
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   const filtered = products.filter(p => {
-  const ps           = productStates[p.sourceId];
-  const matchSearch  = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
-  const matchCat     = selectedCategory ? p.category === selectedCategory : true;
-  const matchBrand   = selectedBrand    ? p.brand    === selectedBrand    : true;
-  const matchTagging =
-    selectedTagging === "All"    ? true :
-    selectedTagging === "Tagged" ? ps?.value !== "" :
-                                    ps?.value === "" || ps?.value == null;
-  return matchSearch && matchCat && matchBrand && matchTagging;
-});
+    const ps           = productStates[p.sourceId];
+    const matchSearch  = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
+    const matchCat     = selectedCategory ? p.category === selectedCategory : true;
+    const matchBrand   = selectedBrand    ? p.brand    === selectedBrand    : true;
+    const matchTagging =
+      selectedTagging === "All"    ? true :
+      selectedTagging === "Tagged" ? ps?.value !== "" :
+                                      ps?.value === "" || ps?.value == null;
+    return matchSearch && matchCat && matchBrand && matchTagging;
+  });
 
   const filledCount = Object.values(productStates).filter(s => s.value !== "").length;
 
@@ -322,13 +401,12 @@ export default function FieldOptimization() {
   }
 
   function handleSave(id) {
-    const val = productStates[id]?.inputVal.trim();
+    const val = productStates[id]?.inputVal?.trim?.() ?? productStates[id]?.inputVal;
     if (!val) return;
     update(id, { value: val, editing: false, inputVal: "" });
   }
 
   function handleClear(id) {
-    // FIX 3: Reset status too so "Unverified" badge disappears on clear
     update(id, { value: "", editing: false, inputVal: "", status: null });
   }
 
@@ -383,7 +461,6 @@ export default function FieldOptimization() {
   // ── Save all to DB ─────────────────────────────────────────
   const handleSaveAll = async () => {
     if (!selectedField) return;
-    const missingRequiredFields = GMC_REQUIRED_FIELDS.filter(f => f !== selectedField.field);
     const filled = Object.entries(productStates).filter(([, s]) => s.value !== "" && s.value != null);
     if (filled.length === 0) { toast.info("No values to save"); return; }
 
@@ -407,7 +484,7 @@ export default function FieldOptimization() {
     }
   };
 
-  // ── Loading: fields not yet fetched ───────────────────────
+  // ── Loading ───────────────────────────────────────────────
   if (fieldsLoading || !selectedField) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -416,6 +493,8 @@ export default function FieldOptimization() {
       </div>
     );
   }
+
+  const isImageField = IMAGE_FIELDS.includes(selectedField.field);
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -473,7 +552,6 @@ export default function FieldOptimization() {
       <div className="bg-card rounded-xl p-4 border border-border space-y-3">
         <div className="flex flex-wrap items-end gap-4">
 
-          {/* Data Field — FIX 1: uses FIELD_GROUPS derived from VISIBLE_FIELDS (excludes EXCLUDE_FIELDS) */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Data Field</label>
             <select
@@ -491,7 +569,6 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          {/* Status */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Status</label>
             <select
@@ -503,7 +580,6 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          {/* Category */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Category</label>
             <select
@@ -516,7 +592,6 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          {/* Brand */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Brand</label>
             <select
@@ -529,7 +604,6 @@ export default function FieldOptimization() {
             </select>
           </div>
 
-          {/* Search */}
           <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
             <label className="text-xs font-medium text-muted-foreground">Search</label>
             <Input
@@ -540,7 +614,6 @@ export default function FieldOptimization() {
             />
           </div>
 
-          {/* Reset */}
           <Button
             size="sm"
             variant="outline"
@@ -556,63 +629,64 @@ export default function FieldOptimization() {
         </div>
       </div>
 
-      {/* ── AI Fill Card ── */}
-      <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 flex items-center justify-between gap-6 flex-wrap">
-        <div className="flex items-start gap-3">
-          <div className="h-9 w-9 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
-            <Sparkles className="h-4 w-4 text-purple-600" />
+      {/* ── AI Fill Card — hide for image fields ── */}
+      {!isImageField && (
+        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 flex items-center justify-between gap-6 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
+              <Sparkles className="h-4 w-4 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                AI Auto-Fill — {selectedField.label}
+              </p>
+              <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
+                AI will suggest <strong>{selectedField.label}</strong> values for all{" "}
+                {products.length} missing products instantly.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
-              AI Auto-Fill — {selectedField.label}
-            </p>
-            <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
-              AI will suggest <strong>{selectedField.label}</strong> values for all{" "}
-              {products.length} missing products instantly.
-            </p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {filledCount > 0 && (
+          <div className="flex items-center gap-2 shrink-0">
+            {filledCount > 0 && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive border-destructive/30 text-sm"
+                onClick={() => {
+                  const reset = {};
+                  products.forEach(p => {
+                    reset[p.sourceId] = { value: "", editing: false, inputVal: "", status: null };
+                  });
+                  setProductStates(reset);
+                }}
+              >
+                <XCircle className="h-4 w-4" /> Clear All
+              </Button>
+            )}
             <Button
-              variant="outline"
-              className="gap-2 text-destructive border-destructive/30 text-sm"
-              onClick={() => {
-                const reset = {};
-                products.forEach(p => {
-                  // FIX 3: Clear All also resets status
-                  reset[p.sourceId] = { value: "", editing: false, inputVal: "", status: null };
-                });
-                setProductStates(reset);
-              }}
+              className="gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm"
+              onClick={handleAiFill}
+              disabled={aiLoading || products.length === 0}
             >
-              <XCircle className="h-4 w-4" /> Clear All
+              {aiLoading
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling…</>
+                : <><Sparkles className="h-4 w-4" /> AI Fill All</>
+              }
             </Button>
-          )}
-          <Button
-            className="gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm"
-            onClick={handleAiFill}
-            disabled={aiLoading || products.length === 0}
-          >
-            {aiLoading
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling…</>
-              : <><Sparkles className="h-4 w-4" /> AI Fill All</>
-            }
-          </Button>
-        </div>
-
-        {aiLoading && (
-          <div className="w-full h-1 bg-purple-100 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-purple-500 rounded-full"
-              initial={{ width: "0%" }}
-              animate={{ width: "100%" }}
-              transition={{ duration: 3, ease: "easeInOut" }}
-            />
           </div>
-        )}
-      </div>
+
+          {aiLoading && (
+            <div className="w-full h-1 bg-purple-100 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-purple-500 rounded-full"
+                initial={{ width: "0%" }}
+                animate={{ width: "100%" }}
+                transition={{ duration: 3, ease: "easeInOut" }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Product Table ── */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
