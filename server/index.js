@@ -6,7 +6,7 @@ const session = require("express-session");
 const { connectDB } = require("./config/db");
 const cronRoutes = require("./routes/cronRoutes");
 const path = require("path");
-const aiRoutes = require("./routes/tenant/ai");
+const aiRoutes = require("./routes/tenant/fieldOptimization-AI");
 const keywordsRouter = require("./routes/tenant/keywords");
 const oauthRoutes = require("./routes/oauth");
 const campaignsRouter = require("./routes/campaigns");
@@ -20,7 +20,7 @@ app.use(
     origin: [
       "http://localhost:8080",
       "http://localhost:5173",
-      "http://localhost:3000",
+      "http://localhost:3000",  
     ],
     credentials: true,
   }),
@@ -34,7 +34,7 @@ app.use(
     resave: false,
     saveUninitialized: true,
     cookie: {
-      secure: false, // Set to true in production with HTTPS
+      secure: false,
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },

@@ -82,43 +82,41 @@ function CategoryRow({
 
       {/* google category */}
       <td className="px-4 py-3 min-w-[280px]">
-        {isEditing ? (
+      {isEditing ? (
           <div
-            className="flex flex-col gap-1.5"
-            onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1.5"
+         onClick={(e) => e.stopPropagation()}
+            >      
+           <select
+            autoFocus
+               className="w-40 rounded-lg border border-border bg-secondary px-2 py-1.5 text-xs text-foreground"
+            value={state.inputVal}
+           onChange={(e) => onInputChange(e.target.value)}
           >
-            <div className="flex items-center gap-1.5">
-              <select
-                autoFocus
-                className="flex-1 min-w-0 rounded-lg border border-border bg-secondary px-2 py-1.5 text-xs text-foreground"
-                value={state.inputVal}
-                onChange={(e) => onInputChange(e.target.value)}
-              >
-                <option value="">-- Select Category --</option>
+           <option value="">-- Select --</option>
                 {googleCategories.map((c) => (
-                  <option key={c.google_taxonomy_id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <Button
+             <option key={c.google_taxonomy_id} value={c.name}>
+              {c.name}
+              </option>
+              ))}
+          </select>
+                 <Button
                 size="sm"
-                className="h-8 w-8 p-0 bg-primary text-primary-foreground shrink-0"
-                onClick={onSave}
-                disabled={!state.inputVal}
-              >
-                <Check className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="sm"
+              className="h-7 w-7 p-0 bg-primary text-primary-foreground shrink-0"
+              onClick={onSave}
+               disabled={!state.inputVal}
+            >
+               <Check className="h-3 w-3" />
+               </Button>
+            <Button
+                 size="sm"
                 variant="ghost"
-                className="h-8 w-8 p-0 text-muted-foreground shrink-0"
-                onClick={onSelect}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
+                 className="h-7 w-7 p-0 text-muted-foreground shrink-0"
+              onClick={onSelect}
+               >
+         <X className="h-3 w-3" />
+        </Button>
+         </div>
         ) : isFilled ? (
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground truncate max-w-[160px]">
@@ -260,24 +258,30 @@ export default function GoogleCategory() {
     });
   }
 
-  async function handleSave(id) {
-    const val = productStates[id].inputVal;
-    if (!val) return;
-    try {
-      await API.put(`/products/${id}/google-category`, {
-        google_category: val,
-        google_category_status: "done",
-      });
-      update(id, { value: val, editing: false });
-      toast.success("Category saved!");
-    } catch {
-      toast.error("Failed to save category");
-    }
+async function handleSave(id) {
+  const val = productStates[id].inputVal;
+  if (!val) return;
+  try {
+    await API.put(`/google-categories/products/${id}`, {
+      google_category: val,
+    });
+    update(id, { value: val, editing: false });
+    toast.success("Category saved!");
+  } catch {
+    toast.error("Failed to save category");
   }
+}
 
-  function handleClear(id) {
+
+async function handleClear(id) {
+  try {
+    await API.delete(`/google-categories/products/${id}`);
     update(id, { value: "", editing: false, inputVal: "" });
+    toast.success("Category cleared!");
+  } catch {
+    toast.error("Failed to clear category");
   }
+}
 
   async function handleAiFill() {
     setAiLoading(true);

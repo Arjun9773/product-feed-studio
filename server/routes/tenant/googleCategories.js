@@ -325,4 +325,57 @@ const aiSuggested = suggestions[i]?.trim() || "";
     console.error("AI fill error:", error.message);
   }
 });
+
+// PUT /api/google-categories/products/:id — Save / Edit
+router.put("/products/:id", auth, tenantResolver, async (req, res) => {
+  try {
+    const { google_category } = req.body;
+
+    if (!google_category || google_category.trim() === "") {
+      return res.status(400).json({ message: "google_category is required" });
+    }
+
+    const result = await req.tenantDb.collection("products").updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      {
+        $set: {
+          google_category: google_category.trim(),
+          google_category_optimization_status: "done",
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.json({ message: "Category saved successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// DELETE /api/google-categories/products/:id — Clear
+router.delete("/products/:id", auth, tenantResolver, async (req, res) => {
+  try {
+    const result = await req.tenantDb.collection("products").updateOne(
+      { _id: new mongoose.Types.ObjectId(req.params.id) },
+      {
+        $set: {
+          google_category: "",
+          google_category_optimization_status: "pending",
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.json({ message: "Category cleared successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;
