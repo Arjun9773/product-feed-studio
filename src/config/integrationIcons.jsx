@@ -1,7 +1,7 @@
 import { Megaphone, BarChart2, Facebook, MapPin } from "lucide-react";
 
 export const INTEGRATION_ICONS = {
-  "google-campaign": {
+  "campaign": {
     Icon: Megaphone,
     bg: "bg-yellow-50",
     color: "text-yellow-600",

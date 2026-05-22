@@ -188,7 +188,7 @@ export function AppHeader({ onMenuToggle }) {
                     />
 
                     {/* Panel */}
-                    <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-border bg-card shadow-xl z-50 p-4">
+                    <div className="absolute right-0 top-full mt-2 w-96 rounded-2xl border border-border bg-card shadow-xl z-50 p-4">
                       
                       {/* Header */}
                       <div className="flex items-center justify-between mb-1">

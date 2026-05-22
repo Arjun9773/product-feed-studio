@@ -12,6 +12,8 @@ const oauthRoutes = require("./routes/oauth");
 const campaignsRouter = require("./routes/campaigns");
 const integrationsRouter = require("./routes/integrations");
 const competitorPriceRouter = require("./routes/tenant/competitorPrice.route.js");
+const aiImageRoutes = require('./routes/aiImageGeneration');
+const uploadRoutes = require('./routes/upload');
  
 const app = express();
  
@@ -62,6 +64,10 @@ app.use("/api/keywords", keywordsRouter);
 app.use("/api/campaigns", campaignsRouter);
 app.use("/api/integrations", integrationsRouter);
 app.use("/api/competitor-price", competitorPriceRouter);
+app.use('/api/upload-image', uploadRoutes);
+app.use("/api/cron", cronRoutes);
+app.use('/ai', aiImageRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
  
 app.post("/api/test-signup", (req, res) =>
   res.json({ ok: true, body: req.body }),
@@ -72,8 +78,25 @@ app.get("/", (req, res) =>
  
 const PORT = process.env.PORT || 5000;
  
-connectDB().then(async () => {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  const { initAllCrons } = require("./services/cronService");
-  await initAllCrons();
+connectDB()
+  .then(async () => {
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port ${PORT}`);
+    });
+
+    // Initialize cron jobs
+    const { initAllCrons } = require("./services/cronService");
+
+    await initAllCrons();
+
+    console.log("✅ Cron jobs initialized");
+  })
+  .catch((err) => {
+    console.error("❌ DB Connection Failed:", err);
+  });
+// எல்லா routes-உம் print ஆகும்
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
 });
+

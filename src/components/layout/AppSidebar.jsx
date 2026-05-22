@@ -28,7 +28,6 @@ const navItems = [
   { title: "Google Category",    icon: FolderTree,      path: "/google-category" },
   { title: "Feed Product List",  icon: Package,         path: "/feed-products" },
   { title: "Output Feed",        icon: RssIcon,         path: "/output-feed" },
-  { title: "Campaign",           icon: Target,          path: "/campaign" },
   { title: "Settings",           icon: Settings,        path: "/settings" },
   
 ];
@@ -45,7 +44,7 @@ export function AppSidebar({ open, onToggle }) {
     >
       {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2.5 min-w-0">
+        {/* <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary">
             <Rss className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -68,7 +67,7 @@ export function AppSidebar({ open, onToggle }) {
               !open && "rotate-180"
             )}
           />
-        </button>
+        </button> */}
       </div>
 
       {/* Main Nav */}

@@ -22,25 +22,58 @@ const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
 const EXCLUDE_FIELDS = ['google_category', 'proper_casing'];
 
 // Image fields — these get file-upload + preview UI
-const IMAGE_FIELDS = ['additional_image', 'additional_image_link', 'image_link', 'image'];
+const IMAGE_FIELDS = [
+  'additional_image',
+  'additional_image_link',
+  'image_link',
+  'image',
+  ...Array.from({ length: 8 }, (_, i) => `additional_image${i + 1}`),
+];
 
 // ============================================================
 // IMAGE UPLOAD CELL
 // ============================================================
 function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Preview காட்டு
+    const reader = new FileReader();
+    reader.onload = () => onInputChange(reader.result); // temp preview
+    reader.readAsDataURL(file);
+
+    // Server-க்கு upload பண்ணு
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const res  = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      // Preview-ஐ real URL-ஆல் replace பண்ணு
+      onInputChange(data.url); // e.g. /uploads/products/product-123.jpg
+    } catch {
+      toast.error('Upload failed');
+      onInputChange(''); // preview clear
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const hasPreview = !!state.inputVal;
 
   return (
     <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-      {/* Preview */}
       {hasPreview && (
         <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-border bg-secondary shrink-0">
-          <img
-            src={state.inputVal}
-            alt="preview"
-            className="w-full h-full object-cover"
-            onError={(e) => { e.target.src = ""; }}
-          />
+          <img src={state.inputVal} alt="preview" className="w-full h-full object-cover" />
           <button
             onClick={() => onInputChange("")}
             className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive flex items-center justify-center"
@@ -50,33 +83,30 @@ function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
         </div>
       )}
 
-      {/* Upload button */}
       <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-secondary px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-all w-fit">
-        <Upload className="h-3.5 w-3.5" />
-        <span>{hasPreview ? "Change Image" : "Upload Image"}</span>
+        {uploading
+          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Uploading...</span></>
+          : <><Upload className="h-3.5 w-3.5" /><span>{hasPreview ? "Change Image" : "Upload Image"}</span></>
+        }
         <input
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => onInputChange(reader.result);
-            reader.readAsDataURL(file);
-          }}
+          disabled={uploading}
+          onChange={handleFileChange}
         />
       </label>
 
-      {/* Save / Cancel */}
       <div className="flex items-center gap-2">
         <Button
           size="sm"
           className="h-7 text-xs gap-1 px-3"
           onClick={onSave}
-          disabled={!state.inputVal}
+          // URL இருந்தால் மட்டும் save enable — base64 இல்லை
+          disabled={!state.inputVal || state.inputVal.startsWith('data:')}
         >
-          <Check className="h-3 w-3" />Save
+          <Check className="h-3 w-3" />
+          {uploading ? 'Wait...' : 'Save'}
         </Button>
         <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>
           Cancel
@@ -270,6 +300,7 @@ export default function FieldOptimization() {
   const location       = useLocation();
 
   const { fields: auditFields, loading: fieldsLoading } = useAuditFields();
+  // console.log(auditFields.map(f => f.field));
 
   const VISIBLE_FIELDS = useMemo(
     () => auditFields.filter(f => !EXCLUDE_FIELDS.includes(f.field)),
