@@ -150,10 +150,9 @@ router.get('/gmc-validation', auth, tenantResolver, async (req, res) => {
 router.get('/with-keywords', auth, tenantResolver, async (req, res) => {
   try {
     const HIDE_FIELDS = {
-      _id: 0, __v: 0, feedId: 0, tenantId: 0,
-      is_active: 0, deactivatedAt: 0, importedAt: 0, updatedAt: 0,
-      title_optimization_status: 0, field_optimization_status: 0,
-      google_category_optimization_status: 0, keyword_optimization_status: 0,
+      _id: 0, __v: 0, feedId: 0, tenantId: 0, is_active: 0,deactivatedAt: 0,
+        importedAt: 0, updatedAt: 0,field_optimization_status: 0,
+        google_category_optimization_status: 0, keyword_optimization_status: 0,
     };
 
     const products = await req.tenantDb.collection('products')
@@ -168,10 +167,13 @@ router.get('/with-keywords', auth, tenantResolver, async (req, res) => {
     const kwMap = {};
     keywordDocs.forEach(k => { kwMap[k.sourceId] = k.active_keywords || []; });
 
-    const withKeywords = products.map(p => ({
-      ...p,
-      active_keywords: kwMap[p.sourceId] || [],
-    }));
+const withKeywords = products.map(p => ({
+  ...p,
+  product_name: p.title_optimization_status === 'done' && p.optimized_product_name
+    ? p.optimized_product_name
+    : p.product_name,
+  active_keywords: kwMap[p.sourceId] || [],
+}));
 
     const fieldConfig = [
       { key: 'sourceId',          readonly: true,  type: 'text',  pinOrder: 1  },

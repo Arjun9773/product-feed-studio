@@ -480,7 +480,7 @@ export default function FieldOptimization() {
         });
         return next;
       });
-
+        setSelectedTagging("All");
       if (filledCount > 0)     toast.success(`${filledCount} products filled!`);
       if (unverifiedCount > 0) toast.warning(`${unverifiedCount} products are unverified - please fill manually`);
 

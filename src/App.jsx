@@ -22,6 +22,7 @@ import NotFound from "@/pages/NotFound";
 import Settings from "./pages/Settings";
 import CampaignFlow from "./pages/Campaign";
 import CompetitorPriceIntelligence from "@/pages/CompetitorPriceIntelligence";
+import CampaingnDetails from "./pages/CampaignDetails";
 
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
               <Route path="/campaign" element={<CampaignFlow />} />
               <Route path="/competitor-price" element={<CompetitorPriceIntelligence />} />
+              <Route path="/campaign/:id" element={<CampaingnDetails/>}/>
             </Route>
 
             <Route path="*" element={<NotFound />} />
