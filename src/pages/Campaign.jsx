@@ -267,7 +267,7 @@ function Dashboard({
       <div className="max-w-5xl mx-auto px-6 py-10">
         {/* ← ADD THIS BUTTON HERE */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
         >
           <ChevronLeft className="h-4 w-4" />

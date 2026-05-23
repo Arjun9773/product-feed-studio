@@ -351,7 +351,7 @@ export default function CompetitorPriceIntelligence() {
 
       {/* Back */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate("/")}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ChevronLeft className="h-4 w-4" />Back to Optimization Center

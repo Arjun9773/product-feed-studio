@@ -12,14 +12,21 @@ function escapeXml(str) {
     .replace(/'/g,  '&apos;');
 }
 
-// ── CSV escape ────────────────────────────────────────────────
-function csvEscape(str, qualifier = '') {
+// ── CSV escape (RFC 4180 standard) ────────────────────────────
+function csvEscape(str, qualifier = '"') {
   const s = String(str ?? '');
-  if (!qualifier) return s;
-  return `${qualifier}${s.replace(new RegExp(qualifier, 'g'), `\\${qualifier}`)}${qualifier}`;
+  return `${qualifier}${s.replace(new RegExp(qualifier, 'g'), `${qualifier}${qualifier}`)}${qualifier}`;
 }
 
-// ── DB internal fields  ────────────────
+// ── Newline cleaner ───────────────────────────────────────────
+function cleanNewlines(str) {
+  return String(str ?? '')
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// ── DB internal fields ────────────────────────────────────────
 const SKIP_FIELDS = new Set([
   '_id',
   '__v',
@@ -77,8 +84,7 @@ function generateXML(products, feed) {
     const price    = p.price != null ? `${p.price} ${currency}` : null;
     const wasPrice = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0
                    ? `${Number(p.was_price)} ${currency}` : null;
-    // const avail    = p.stock > 0 ? 'in_stock' : 'out_of_stock';
-    const avail = p.stock > 0 ? 'in stock' : 'out of stock';
+    const avail    = p.stock > 0 ? 'in stock' : 'out of stock';
     const link     = (feed.output_link_text || p.product_url || '') + tracking;
     const title    = feed.output_title_text || p.product_name || '';
     const desc     = feed.output_desc_text  || p.description  || '';
@@ -91,15 +97,15 @@ function generateXML(products, feed) {
       )
       .map(([key, val]) => {
         const mappedKey = GMC_FIELD_MAP[key] || key;
-        return `<g:${mappedKey}>${escapeXml(String(val))}</g:${mappedKey}>`;
+        return `<g:${mappedKey}>${escapeXml(cleanNewlines(String(val)))}</g:${mappedKey}>`;
       })
       .join('\n      ');
 
     return `
     <item>
       <g:id>${escapeXml(p.sourceId)}</g:id>
-      <g:title>${escapeXml(title)}</g:title>
-      <g:description>${escapeXml(desc)}</g:description>
+      <g:title>${escapeXml(cleanNewlines(title))}</g:title>
+      <g:description>${escapeXml(cleanNewlines(desc))}</g:description>
       <g:link>${escapeXml(link)}</g:link>
       <g:availability>${avail}</g:availability>
       <g:condition>new</g:condition>
@@ -124,12 +130,11 @@ function generateXML(products, feed) {
 function generateCSV(products, feed) {
   const currency  = feed.format_subtype_currency || 'INR';
   const tracking  = feed.output_feed_tracking ? `?${feed.output_feed_tracking}` : '';
-  const qualifier = feed.op_text_qualifier === 'double' ? '"'
-                  : feed.op_text_qualifier === 'single' ? "'"
-                  : '';
-  const q = (val) => csvEscape(String(val ?? ''), qualifier);
 
- 
+  // Always double quote (RFC 4180)
+  const qualifier = feed.op_text_qualifier === 'single' ? "'" : '"';
+  const q = (val) => csvEscape(cleanNewlines(String(val ?? '')), qualifier);
+
   const allKeys = new Set();
   products.forEach(p => {
     Object.keys(p).forEach(key => {
@@ -137,7 +142,6 @@ function generateCSV(products, feed) {
     });
   });
 
- 
   const fixedCols = [
     'sourceId',
     'product_name',
@@ -202,7 +206,8 @@ function generateCSV(products, feed) {
     ? [headerRow, ...rows]
     : rows;
 
-  return lines.join('\n');
+  // \r\n — GMC Windows compatible
+  return lines.join('\r\n');
 }
 
 // ── Main generate function ────────────────────────────────────
@@ -219,14 +224,12 @@ async function generateFeedFile({ tenantDb, feed }) {
     })
     .toArray();
 
-    const excludedCount = await tenantDb
+  const excludedCount = await tenantDb
     .collection('products')
     .countDocuments({ 
       is_active: true, 
       field_optimization_status: { $ne: 'done' }
     });
-
-  // console.log(`[FEED] Generating ${ext.toUpperCase()} for ${feed.cmpid} — ${products.length} active products`);
 
   let content;
   switch (ext) {
