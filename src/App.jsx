@@ -24,7 +24,7 @@ import CampaignFlow from "./pages/Campaign";
 import CompetitorPriceIntelligence from "@/pages/CompetitorPriceIntelligence";
 import CampaingnDetails from "./pages/CampaignDetails";
 
-
+       
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -46,7 +46,7 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/output-feed" element={<OutputFeed />} />
+              <Route path="/output-feed" element={<OutputFeed />} />                                                 
               <Route path="/feed-products" element={<FeedProductList />} />
               <Route path="/title-optimization" element={<TitleOptimization />} />
               <Route path="/google-category" element={<GoogleCategory />} />
