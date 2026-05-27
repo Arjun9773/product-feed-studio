@@ -247,7 +247,7 @@ router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
     }));
     await req.tenantDb.collection('products').bulkWrite(bulkOps);
 
-    // Step 2: Audit collection-லயும் issue remove பண்ணு
+    // Step 2: Audit collection issue remove
     const auditBulkOps = sourceIds.map(id => ({
       updateOne: {
         filter: { sourceId: id },
@@ -256,8 +256,7 @@ router.put('/bulk-update', auth, tenantResolver, async (req, res) => {
     }));
     await req.tenantDb.collection('feed_audit_products').bulkWrite(auditBulkOps);
 
-    // Step 3: GMC required fields check → status recalculate
-    // "done" or "pending" automatically set ஆகும்
+    // Step 3: GMC status recalculate
     await recalculateFieldStatus(req.tenantDb, sourceIds);
 
     res.json({ success: true, message: `${updates.length} products updated successfully` });

@@ -298,7 +298,7 @@ export function AppHeader({ onMenuToggle }) {
                             >
                               {item.connected
                                 ? "Open Dashboard"
-                                : "Explore Module"}
+                                : "Open Dashboard"}
                             </button>
                           </div>
                         );
