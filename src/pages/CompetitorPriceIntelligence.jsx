@@ -5,7 +5,7 @@ import {
   Loader2, RefreshCw, Download, Target,
   AlertCircle, CheckCircle2, Layers,
   ShoppingCart, ChevronDown, Search,
-  ArrowUpRight, ArrowDownRight, BarChart2, ChevronLeft,
+  ArrowUpRight, ArrowDownRight, BarChart2, ChevronLeft,ImageOff
 } from "lucide-react";
 import { Input }  from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -93,8 +93,6 @@ function PriceStatusBadge({ status }) {
 }
 
 // ─── Competitor Pill ──────────────────────────────────────────────────────────
-// Sample image மாதிரி: Logo | ₹1,932 | signal bars
-// Out of Stock இருந்தா அதுவும் காட்டு
 function CompetitorPill({ c }) {
   const isOutOfStock = !c.competitor_price || c.competitor_price === 0;
 
@@ -162,23 +160,32 @@ function ProductRow({ idx, doc }) {
       initial={{ opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: Math.min(idx * 0.03, 0.3) }}
-      className="border-b border-border transition-colors hover:bg-secondary/30 group"
+      className="border-b border-
+       transition-colors hover:bg-secondary/30 group"
     >
 
       {/* ── Product ── */}
       <td className="px-4 py-3 min-w-[220px]">
         <div className="flex items-center gap-3">
-          {doc.product_image ? (
-            <img
-              src={doc.product_image}
-              alt={doc.product_name}
-              className="h-12 w-12 rounded-lg object-cover border border-border shrink-0"
-            />
-          ) : (
-            <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center shrink-0 border border-border">
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </div>
-          )}
+          {console.log("Product Image:", doc.product_image)}
+
+          <img
+            src={doc.product_image}
+            alt={doc.product_name}
+            className="h-12 w-12 rounded-lg object-cover border border-border shrink-0"
+            onError={(e) => {
+              e.target.style.display = "none";
+              e.target.nextElementSibling.style.display = "flex";
+            }}
+          />
+
+          <div
+            className="h-12 w-12 rounded-lg bg-secondary border border-border items-center justify-center shrink-0"
+            style={{ display: "none" }}
+          >
+            <ImageOff className="h-4 w-4 text-muted-foreground" />
+          </div>
+
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight line-clamp-2">
               {doc.product_name || doc.item_code || "—"}
@@ -282,7 +289,7 @@ export default function CompetitorPriceIntelligence() {
       if (search)                          params.search          = search;
 
       const res  = await API.get("/competitor-price/list", { params });
-      console.log("API Response:", res.data);
+      // console.log("API Response:", res.data);
       const body = res.data;
 
       // ✅ No scrape data found → toast காட்டு
@@ -360,7 +367,7 @@ export default function CompetitorPriceIntelligence() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Competitor Price Intelligence</h1>
+          <h1 className="text-2xl font-bold text-foreground">Shopping Ads Monitoring</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Google Shopping · GMC Feed Analysis
             {lastSynced && (

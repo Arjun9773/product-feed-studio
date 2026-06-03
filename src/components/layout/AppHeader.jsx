@@ -126,7 +126,8 @@ export function AppHeader({ onMenuToggle }) {
 
   const hideSidebar =
     location.pathname === "/competitor-price" ||
-    location.pathname === "/campaign";
+    location.pathname === "/campaign" ||
+    location.pathname === "/campaign/test";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-border bg-card/95 backdrop-blur">
@@ -309,6 +310,12 @@ export function AppHeader({ onMenuToggle }) {
               </>
             )}
           </div>
+
+          {displayName && (
+            <span className="hidden sm:inline text-sm font-medium text-foreground border border-border rounded-lg px-3 py-1.5">
+              {displayName}
+            </span>
+          )}
 
           {/* Dark Mode */}
           <Button

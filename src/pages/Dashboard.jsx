@@ -39,6 +39,7 @@ const itemVariants = {
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 function healthColor(score) {
+  if (score === null || score === undefined) return "hsl(220,10%,46%)";
   if (score < 40) return "#ef4444";
   if (score < 65) return "#f59e0b";
   return "#22c55e";
@@ -176,18 +177,19 @@ function useFeedSetup(token, storeId) {
 }
 
 // ─── derived stats ─────────────────────────────────────────────────────────────
-function deriveAudit(data) {
+function deriveAudit(data, totalProducts) {
   const empty = {
-    totalProducts: 0, totalIssues: 0, healthScore: 0,
+    totalProducts: 0, totalIssues: 0, healthScore: null,
     HIGH: 0, MEDIUM: 0, LOW: 0, OTHERS: 0,
     highIssues: [], mediumIssues: [], lowIssues: [], othersIssues: [],
   };
-  if (!data) return empty;
+  // No products → no meaningful audit data
+  if (!data || totalProducts === 0) return empty;
   const issues = data.issues ?? { high: [], medium: [], low: [], others: [] };
   return {
     totalProducts: data.totalProducts ?? 0,
     totalIssues:   data.totalIssues   ?? 0,
-    healthScore:   data.healthScore   ?? 0,
+    healthScore:   data.healthScore   ?? null,
     HIGH:    (issues.high    ?? []).length,
     MEDIUM:  (issues.medium  ?? []).length,
     LOW:     (issues.low     ?? []).length,
@@ -289,14 +291,27 @@ function Skel({ className = "" }) {
   return <div className={`animate-pulse bg-secondary rounded ${className}`} />;
 }
 
-function KpiCard({ label, value, change, up, icon: Icon, color, bg, to, loading }) {
+// Empty state placeholder for charts/sections with no data
+function EmptyState({ icon: Icon, message, subMessage }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+      <div className="h-12 w-12 rounded-full border-2 border-dashed border-border flex items-center justify-center">
+        <Icon className="h-5 w-5 text-muted-foreground/40" />
+      </div>
+      <p className="text-xs font-medium text-muted-foreground">{message}</p>
+      {subMessage && <p className="text-[10px] text-muted-foreground/60">{subMessage}</p>}
+    </div>
+  );
+}
+
+function KpiCard({ label, value, change, up, icon: Icon, color, bg, to, loading, isEmpty }) {
   const inner = (
     <div className="bg-card rounded-xl p-4 sm:p-5 card-shadow border border-border h-full group-hover:border-primary/30 transition-colors">
       <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center ${bg}`}>
-          <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${color}`} />
+        <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center ${isEmpty ? "bg-secondary" : bg}`}>
+          <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${isEmpty ? "text-muted-foreground/40" : color}`} />
         </div>
-        {change !== undefined && !loading && (
+        {change !== undefined && !loading && !isEmpty && (
           <span className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium ${up ? "text-success" : "text-destructive"}`}>
             {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
             {change}
@@ -305,7 +320,7 @@ function KpiCard({ label, value, change, up, icon: Icon, color, bg, to, loading 
       </div>
       {loading
         ? <Skel className="h-6 sm:h-7 w-14 sm:w-16 mb-1" />
-        : <p className="text-xl sm:text-2xl font-bold text-foreground">{value}</p>
+        : <p className={`text-xl sm:text-2xl font-bold ${isEmpty ? "text-muted-foreground/50" : "text-foreground"}`}>{value}</p>
       }
       <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 leading-tight">{label}</p>
     </div>
@@ -400,10 +415,13 @@ export default function Dashboard() {
   const { rules, loading: rulesLoading  } = useTitleRules(token, storeId);
   const { setup, loading: setupLoading  } = useFeedSetup(token, storeId);
 
-  const audit    = deriveAudit(auditRaw);
   const products = deriveProducts(productsRaw);
+  // ← Pass products.total so audit returns null healthScore when no products
+  const audit    = deriveAudit(auditRaw, products.total);
   const feedStat = deriveFeeds(feeds);
   const ruleStat = deriveTitles(rules);
+
+  const hasProducts = products.total > 0;
 
   const issueChartData = [
     { name: "High",   value: audit.HIGH,   color: "#ef4444" },
@@ -417,7 +435,7 @@ export default function Dashboard() {
     const key = `health_trend_${storeId}`;
     let history = [];
     try { history = JSON.parse(localStorage.getItem(key) || "[]"); } catch {}
-    if (!auditLoading && auditRaw && audit.healthScore > 0) {
+    if (!auditLoading && auditRaw && audit.healthScore !== null && audit.healthScore > 0) {
       const now        = new Date();
       const monthLabel = MONTHS[now.getMonth()];
       const lastEntry  = history[history.length - 1];
@@ -432,7 +450,7 @@ export default function Dashboard() {
     }
     return history.length > 0
       ? history
-      : [{ month: "Now", score: auditLoading ? 0 : audit.healthScore }];
+      : [{ month: "Now", score: auditLoading ? 0 : (audit.healthScore ?? 0) }];
   }, [auditRaw, auditLoading, audit.healthScore, storeId]);
 
   return (
@@ -470,13 +488,63 @@ export default function Dashboard() {
 
       {/* ── KPI strip ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
-        <KpiCard label="Total Products"     value={products.total}          icon={Package}       color="text-primary"     bg="bg-primary/10"     to="/feed-products"      loading={productsLoading} />
-        <KpiCard label="Feed Health Score"  value={`${audit.healthScore}%`} icon={Heart}         color="text-success"     bg="bg-success/10"     to="/feed-audit"         loading={auditLoading} />
-        <KpiCard label="Total Issues"       value={audit.totalIssues}       icon={AlertCircle}   color="text-destructive" bg="bg-destructive/10" to="/feed-audit"          loading={auditLoading}
-          change={audit.HIGH > 0 ? `${audit.HIGH} high` : undefined} />
-        <KpiCard label="Missing Attributes" value={products.missingAttrs}   icon={AlertTriangle} color="text-warning"     bg="bg-warning/10"     to="/field-optimization" loading={productsLoading} />
-        <KpiCard label="Output Feeds"       value={feedStat.total}          icon={FileOutput}    color="text-info"        bg="bg-info/10"        to="/output-feed"        loading={feedsLoading} />
-        <KpiCard label="Title Rules"        value={ruleStat.total}          icon={ListOrdered}   color="text-primary"     bg="bg-primary/10"     to="/title-optimization" loading={rulesLoading} />
+        <KpiCard
+          label="Total Products"
+          value={products.total}
+          icon={Package}
+          color="text-primary"
+          bg="bg-primary/10"
+          to="/feed-products"
+          loading={productsLoading}
+        />
+        <KpiCard
+          label="Feed Health Score"
+          value={audit.healthScore === null ? "—" : `${audit.healthScore}%`}
+          icon={Heart}
+          color={audit.healthScore === null ? "text-muted-foreground" : "text-success"}
+          bg={audit.healthScore === null ? "bg-secondary" : "bg-success/10"}
+          isEmpty={audit.healthScore === null && !auditLoading && !productsLoading}
+          to="/feed-audit"
+          loading={auditLoading || productsLoading}
+        />
+        <KpiCard
+          label="Total Issues"
+          value={audit.healthScore === null ? "—" : audit.totalIssues}
+          icon={AlertCircle}
+          color={audit.healthScore === null ? "text-muted-foreground" : "text-destructive"}
+          bg={audit.healthScore === null ? "bg-secondary" : "bg-destructive/10"}
+          isEmpty={audit.healthScore === null && !auditLoading && !productsLoading}
+          to="/feed-audit"
+          loading={auditLoading || productsLoading}
+          change={audit.HIGH > 0 ? `${audit.HIGH} high` : undefined}
+        />
+        <KpiCard
+          label="Missing Attributes"
+          value={products.missingAttrs}
+          icon={AlertTriangle}
+          color="text-warning"
+          bg="bg-warning/10"
+          to="/field-optimization"
+          loading={productsLoading}
+        />
+        <KpiCard
+          label="Output Feeds"
+          value={feedStat.total}
+          icon={FileOutput}
+          color="text-info"
+          bg="bg-info/10"
+          to="/output-feed"
+          loading={feedsLoading}
+        />
+        <KpiCard
+          label="Title Rules"
+          value={ruleStat.total}
+          icon={ListOrdered}
+          color="text-primary"
+          bg="bg-primary/10"
+          to="/title-optimization"
+          loading={rulesLoading}
+        />
       </div>
 
       {/* ── Feed Health + Issue Distribution ── */}
@@ -493,9 +561,20 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center justify-center relative">
-            {auditLoading
+            {(auditLoading || productsLoading)
               ? <Skel className="h-[110px] w-[110px] sm:h-[130px] sm:w-[130px] rounded-full" />
+              : audit.healthScore === null
+              ? (
+                // ── No products empty state ──
+                <div className="flex flex-col items-center justify-center h-[110px] sm:h-[130px] gap-3">
+                  <div className="h-16 w-16 rounded-full border-[3px] border-dashed border-border flex items-center justify-center">
+                    <Package className="h-6 w-6 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">No products imported yet</p>
+                </div>
+              )
               : (
+                // ── Normal gauge ──
                 <>
                   <svg width="120" height="120" viewBox="0 0 100 100" className="-rotate-90 sm:w-[130px] sm:h-[130px]">
                     <circle cx="50" cy="50" r="40" strokeWidth="10" className="fill-none stroke-secondary" />
@@ -524,10 +603,12 @@ export default function Dashboard() {
               { label: "Others",          count: audit.OTHERS, color: "bg-info",        text: "text-info"        },
             ].map(row => (
               <div key={row.label} className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full shrink-0 ${row.color}`} />
+                <span className={`h-2 w-2 rounded-full shrink-0 ${audit.healthScore === null ? "bg-muted-foreground/20" : row.color}`} />
                 <span className="text-xs text-muted-foreground flex-1">{row.label}</span>
-                {auditLoading
+                {(auditLoading || productsLoading)
                   ? <Skel className="h-4 w-14" />
+                  : audit.healthScore === null
+                  ? <span className="text-[10px] text-muted-foreground/50">—</span>
                   : <Badge className={`${row.text} bg-transparent border-current text-[10px] px-1.5 py-0`}>{row.count} issues</Badge>
                 }
               </div>
@@ -548,8 +629,19 @@ export default function Dashboard() {
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
-          {auditLoading
+          {(auditLoading || productsLoading)
             ? <div className="flex-1 flex items-center justify-center"><Skel className="h-[160px] w-[160px] sm:h-[180px] sm:w-[180px] rounded-full" /></div>
+            : audit.healthScore === null
+            ? (
+              // ── No products empty state ──
+              <div className="flex-1 flex items-center justify-center" style={{ minHeight: 200 }}>
+                <EmptyState
+                  icon={BarChart3}
+                  message="No issue data available"
+                  subMessage="Import products to see issue distribution"
+                />
+              </div>
+            )
             : (
               <div className="flex-1 flex flex-col sm:flex-row gap-4 sm:gap-6 items-center sm:items-stretch" style={{ minHeight: 200 }}>
                 <div className="w-full sm:flex-1 min-h-0" style={{ height: 200 }}>
@@ -596,6 +688,16 @@ export default function Dashboard() {
           </div>
           {productsLoading
             ? <Skel className="h-[200px] sm:h-[220px] w-full" />
+            : !hasProducts
+            ? (
+              <div style={{ height: 200 }} className="flex items-center justify-center">
+                <EmptyState
+                  icon={Layers}
+                  message="No attribute data"
+                  subMessage="Import products to see completeness"
+                />
+              </div>
+            )
             : (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={products.attributeData} barSize={22}>
@@ -632,6 +734,16 @@ export default function Dashboard() {
           </div>
           {auditLoading && trendData.length <= 1
             ? <Skel className="h-[200px] w-full" />
+            : !hasProducts
+            ? (
+              <div style={{ height: 200 }} className="flex items-center justify-center">
+                <EmptyState
+                  icon={TrendingUp}
+                  message="No trend data yet"
+                  subMessage="Health trend will appear after import"
+                />
+              </div>
+            )
             : (
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={trendData}>
@@ -672,8 +784,10 @@ export default function Dashboard() {
 
         {/* Feed Audit */}
         <ModuleCard title="Feed Audit" subtitle="Issues detected in your feed" to="/feed-audit" icon={AlertCircle} iconColor="text-destructive" iconBg="bg-destructive/10">
-          {auditLoading
+          {auditLoading || productsLoading
             ? <div className="grid grid-cols-2 gap-2 sm:gap-3">{[...Array(4)].map((_, i) => <Skel key={i} className="h-14 sm:h-16 rounded-lg" />)}</div>
+            : !hasProducts
+            ? <EmptyState icon={AlertCircle} message="No audit data" subMessage="Import products to run feed audit" />
             : (
               <>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -700,53 +814,48 @@ export default function Dashboard() {
 
         {/* Google Category */}
         <ModuleCard title="Google Category" subtitle="Category mapping status" to="/google-category" icon={Tag} iconColor="text-info" iconBg="bg-info/10">
-          <div className="space-y-2 sm:space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Mapped products</span>
-              {productsLoading
-                ? <Skel className="h-5 w-16" />
-                : (
+          {productsLoading
+            ? <div className="space-y-2 sm:space-y-3"><Skel className="h-5 w-full" /><Skel className="h-2 w-full" /><div className="grid grid-cols-2 gap-2"><Skel className="h-14" /><Skel className="h-14" /></div></div>
+            : !hasProducts
+            ? <EmptyState icon={Tag} message="No category data" subMessage="Import products to map Google categories" />
+            : (
+              <div className="space-y-2 sm:space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Mapped products</span>
                   <Badge className={`border-0 text-xs ${products.googleMapped === products.total ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
                     {products.googleMapped} / {products.total}
                   </Badge>
-                )
-              }
-            </div>
-            <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-              {productsLoading
-                ? <div className="h-full bg-secondary animate-pulse rounded-full" style={{ width: "60%" }} />
-                : <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${products.googlePct}%` }} />
-              }
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-success/5 rounded-lg p-2 sm:p-2.5">
-                {productsLoading
-                  ? <Skel className="h-5 w-8 mb-1" />
-                  : <p className="font-bold text-success text-sm">{products.googleMapped}</p>
-                }
-                <p className="text-muted-foreground text-[10px] sm:text-xs">Mapped</p>
+                </div>
+                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${products.googlePct}%` }} />
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-success/5 rounded-lg p-2 sm:p-2.5">
+                    <p className="font-bold text-success text-sm">{products.googleMapped}</p>
+                    <p className="text-muted-foreground text-[10px] sm:text-xs">Mapped</p>
+                  </div>
+                  <div className="bg-warning/5 rounded-lg p-2 sm:p-2.5">
+                    <p className="font-bold text-warning text-sm">{products.googleUnmapped}</p>
+                    <p className="text-muted-foreground text-[10px] sm:text-xs">Unmapped</p>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  {products.googleUnmapped === 0
+                    ? <><Zap className="h-3 w-3 text-success shrink-0" />All products have Google category ✓</>
+                    : <><Info className="h-3 w-3 text-warning shrink-0" />{products.googleUnmapped} product{products.googleUnmapped > 1 ? "s" : ""} need mapping</>
+                  }
+                </div>
               </div>
-              <div className="bg-warning/5 rounded-lg p-2 sm:p-2.5">
-                {productsLoading
-                  ? <Skel className="h-5 w-8 mb-1" />
-                  : <p className="font-bold text-warning text-sm">{products.googleUnmapped}</p>
-                }
-                <p className="text-muted-foreground text-[10px] sm:text-xs">Unmapped</p>
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-              {productsLoading ? null : products.googleUnmapped === 0
-                ? <><Zap className="h-3 w-3 text-success shrink-0" />All products have Google category ✓</>
-                : <><Info className="h-3 w-3 text-warning shrink-0" />{products.googleUnmapped} product{products.googleUnmapped > 1 ? "s" : ""} need mapping</>
-              }
-            </div>
-          </div>
+            )
+          }
         </ModuleCard>
 
         {/* Field Optimization */}
         <ModuleCard title="Field Optimization" subtitle="Product attribute filling" to="/field-optimization" icon={Layers} iconColor="text-warning" iconBg="bg-warning/10">
           {productsLoading
             ? <div className="space-y-2">{[...Array(5)].map((_, i) => <Skel key={i} className="h-7" />)}</div>
+            : !hasProducts
+            ? <EmptyState icon={Layers} message="No fields to optimize" subMessage="Import products to start optimizing" />
             : (
               <>
                 <div className="space-y-2 sm:space-y-2.5">
@@ -861,6 +970,8 @@ export default function Dashboard() {
         <ModuleCard title="Custom Labels" subtitle="Campaign segmentation labels" to="/custom-labels" icon={Tag} iconColor="text-warning" iconBg="bg-warning/10">
           {productsLoading
             ? <div className="space-y-2">{[...Array(5)].map((_, i) => <Skel key={i} className="h-10" />)}</div>
+            : !hasProducts
+            ? <EmptyState icon={Tag} message="No labels yet" subMessage="Import products to configure custom labels" />
             : (
               <>
                 <div className="space-y-2 sm:space-y-3">
@@ -905,6 +1016,8 @@ export default function Dashboard() {
           </div>
           {productsLoading
             ? <div className="grid grid-cols-2 gap-2 sm:gap-3">{[...Array(4)].map((_, i) => <Skel key={i} className="h-14 sm:h-16 rounded-xl" />)}</div>
+            : !hasProducts
+            ? <EmptyState icon={Package} message="No products imported" subMessage="Set up your feed to get started" />
             : (
               <>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
@@ -942,15 +1055,17 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 mb-3 sm:mb-4">
             <AlertTriangle className="h-4 w-4 text-destructive" />
             <h3 className="font-semibold text-sm text-foreground">Critical Issues</h3>
-            {!auditLoading && (
+            {!auditLoading && audit.healthScore !== null && (
               <Badge className="bg-destructive/10 text-destructive border-0 text-xs ml-1">{audit.HIGH} high</Badge>
             )}
             <Link to="/feed-audit" className="ml-auto text-muted-foreground hover:text-primary">
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
-          {auditLoading
+          {auditLoading || productsLoading
             ? <div className="space-y-2">{[...Array(5)].map((_, i) => <Skel key={i} className="h-9 sm:h-10" />)}</div>
+            : !hasProducts
+            ? <EmptyState icon={AlertTriangle} message="No issues to show" subMessage="Import products to detect feed issues" />
             : (
               <>
                 <div className="space-y-1.5 sm:space-y-2">
