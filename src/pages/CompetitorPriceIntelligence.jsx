@@ -205,6 +205,24 @@ function ProductRow({ idx, doc }) {
         }
       </td>
 
+      {/* ── Product URL ── */}
+      <td className="px-4 py-3 whitespace-nowrap">
+          {doc.product_url ? (
+          <a
+            href={doc.product_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            title={doc.product_url}
+          >
+            <ExternalLink className="h-3 w-3 shrink-0" />
+            <span>View Product</span>
+          </a>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">—</span>
+        )}
+      </td>                     
+
       {/* ── Competitor Lowest ── */}
       <td className="px-4 py-3 min-w-[150px]">
         {doc.comp_lowest_price != null ? (
@@ -363,6 +381,7 @@ export default function CompetitorPriceIntelligence() {
       >
         <ChevronLeft className="h-4 w-4" />Back to Optimization Center
       </button>
+      
 
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
@@ -528,6 +547,7 @@ export default function CompetitorPriceIntelligence() {
                 <tr className="border-b border-border bg-secondary/50">
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide min-w-[220px]">Product</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Your Price</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Product URL</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Competitor Lowest</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Diff</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Competitors Selling</th>

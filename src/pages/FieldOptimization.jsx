@@ -83,6 +83,32 @@ function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
   );
 }
 
+function TruncatedText({ value, maxChars = 80 }) {
+  const [expanded, setExpanded] = useState(false);
+  
+  if (!value) return null;
+  
+  const isLong = value.length > maxChars;
+  const display = expanded ? value : value.slice(0, maxChars);
+  
+  return (
+    <span className="text-sm text-foreground">
+      {display}
+      {isLong && (
+        <>
+          {!expanded && "... "}
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+            className="text-primary text-xs hover:underline ml-1"
+          >
+            {expanded ? "Show less" : "Show more"}
+          </button>
+        </>
+      )}
+    </span>
+  );
+}
+
 // ============================================================
 // PRODUCT CARD — mobile view
 // ============================================================
@@ -188,7 +214,7 @@ function ProductCard({ idx, product, state, selectedField, onSelect, onSave, onC
                 className="h-10 w-10 rounded-lg object-cover border border-border"
                 onError={(e) => { e.target.style.display = 'none'; }} />
             ) : (
-              <span className="text-sm font-medium text-foreground flex-1 truncate">{state.value}</span>
+              <TruncatedText value={state.value} maxChars={80} />
             )}
             <button onClick={onSelect}
               className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0">
@@ -298,7 +324,7 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
               ? <img src={state.value} alt="uploaded"
                   className="h-10 w-10 rounded-lg object-cover border border-border"
                   onError={(e) => { e.target.style.display = 'none'; }} />
-              : <span className="text-sm font-medium text-foreground">{state.value}</span>
+              : <TruncatedText value={state.value} maxChars={80} />
             }
             <button onClick={onSelect}
               className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all">
@@ -407,11 +433,20 @@ export default function FieldOptimization() {
       setProducts(data);
       const states = {};
       data.forEach(p => {
-        states[p.sourceId] = { value: p[selectedField.field] || "", editing: false, inputVal: "", status: null };
+        const val = p[selectedField.field];
+        // ✅ "null" string-ஐ empty-ஆ மாத்து
+        const cleanVal = (val === 'null' || val === null || val === undefined) ? '' : val;
+        states[p.sourceId] = { 
+          value: cleanVal, 
+          editing: false, 
+          inputVal: "", 
+          status: null 
+        };
       });
       setProductStates(states);
     } catch {
       toast.error("Failed to load products");
+
     } finally {
       setLoading(false);
     }

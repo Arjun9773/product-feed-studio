@@ -196,6 +196,26 @@ function EditableCell({ product, fieldKey, fieldConfig, onSave }) {
   );
 }
 
+// Add this component
+function TruncatedText({ value, maxChars = 120 }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!value) return null;
+  const isLong = value.length > maxChars;
+  return (
+    <span className="text-sm text-foreground">
+      {expanded || !isLong ? value : `${value.slice(0, maxChars)}…`}
+      {isLong && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+          className="ml-1.5 text-xs text-primary hover:underline"
+        >
+          {expanded ? "less" : "more"}
+        </button>
+      )}
+    </span>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────
 export default function FeedProductList() {
   const { user, currentStoreId, isSuperAdmin, activeShopName } = useAuth();
@@ -224,6 +244,7 @@ export default function FeedProductList() {
       const data = await res.json();
 
       const products    = Array.isArray(data.products)    ? data.products    : [];
+      console.log("First product:", JSON.stringify(products[0], null, 2));
       const fieldConfig = Array.isArray(data.fieldConfig) ? data.fieldConfig : [];
 
       setProducts(products);

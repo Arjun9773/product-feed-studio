@@ -62,32 +62,68 @@ const GMC_FIELD_MAP = {
   age_group:         'age_group',
   gender:            'gender',
   category:          'product_type',
+  // additional_image fields — handled separately in XML
   additional_image1: 'additional_image_link',
+  additional_image2: 'additional_image_link',
+  additional_image3: 'additional_image_link',
+  additional_image4: 'additional_image_link',
+  additional_image5: 'additional_image_link',
+  additional_image6: 'additional_image_link',
+  additional_image7: 'additional_image_link',
+  additional_image8: 'additional_image_link',
 };
+
+// ── additional image field keys ───────────────────────────────
+const ADDITIONAL_IMAGE_KEYS = new Set([
+  'additional_image1','additional_image2','additional_image3','additional_image4',
+  'additional_image5','additional_image6','additional_image7','additional_image8',
+]);
 
 // ── null / empty check ────────────────────────────────────────
 function isEmpty(val) {
   return val === null || val === undefined || val === '' || val === 'null';
 }
 
+// ── FIX 3: Safe tracking append (avoid duplicate ?) ───────────
+function appendTracking(url, tracking) {
+  if (!tracking) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}${tracking}`;
+}
+
 // ── Google Shopping XML ───────────────────────────────────────
 function generateXML(products, feed) {
   const currency = feed.format_subtype_currency || 'INR';
-  const tracking = feed.output_feed_tracking ? `?${feed.output_feed_tracking}` : '';
+  const tracking = feed.output_feed_tracking || '';
 
   const specialFields = new Set([
     'sourceId', 'product_name', 'description',
     'product_url', 'stock', 'price', 'was_price',
+    ...ADDITIONAL_IMAGE_KEYS,
   ]);
 
   const items = products.map(p => {
+    // FIX 4: skip product if sourceId is empty
+    if (isEmpty(p.sourceId)) return '';
+
     const price    = p.price != null ? `${p.price} ${currency}` : null;
     const wasPrice = p.was_price && !isNaN(Number(p.was_price)) && Number(p.was_price) > 0
                    ? `${Number(p.was_price)} ${currency}` : null;
     const avail    = p.stock > 0 ? 'in stock' : 'out of stock';
-    const link     = (feed.output_link_text || p.product_url || '') + tracking;
-    const title    = feed.output_title_text || p.product_name || '';
-    const desc     = feed.output_desc_text  || p.description  || '';
+
+    // FIX 3: safe tracking append
+    const link  = appendTracking(feed.output_link_text || p.product_url || '', tracking);
+    const title = feed.output_title_text || p.product_name || '';
+    const desc  = feed.output_desc_text  || p.description  || '';
+
+    // FIX 1: additional_image_link — repeat same tag for each image
+    const additionalImageTags = [...ADDITIONAL_IMAGE_KEYS]
+      .filter(key => !isEmpty(p[key]))
+      .map(key => `<g:additional_image_link>${escapeXml(cleanNewlines(String(p[key])))}</g:additional_image_link>`)
+      .join('\n      ');
+
+    // FIX 2: condition from DB, fallback to 'new'
+    const condition = !isEmpty(p.condition) ? p.condition : 'new';
 
     const dynamicTags = Object.entries(p)
       .filter(([key, val]) =>
@@ -108,9 +144,10 @@ function generateXML(products, feed) {
       <g:description>${escapeXml(cleanNewlines(desc))}</g:description>
       <g:link>${escapeXml(link)}</g:link>
       <g:availability>${avail}</g:availability>
-      <g:condition>new</g:condition>
+      <g:condition>${escapeXml(condition)}</g:condition>
       ${price    ? `<g:price>${escapeXml(price)}</g:price>`              : ''}
       ${wasPrice ? `<g:sale_price>${escapeXml(wasPrice)}</g:sale_price>` : ''}
+      ${additionalImageTags}
       ${dynamicTags}
     </item>`;
   }).join('');
@@ -129,9 +166,8 @@ function generateXML(products, feed) {
 // ── Google Shopping CSV ───────────────────────────────────────
 function generateCSV(products, feed) {
   const currency  = feed.format_subtype_currency || 'INR';
-  const tracking  = feed.output_feed_tracking ? `?${feed.output_feed_tracking}` : '';
+  const tracking  = feed.output_feed_tracking || '';
 
-  // Always double quote (RFC 4180)
   const qualifier = feed.op_text_qualifier === 'single' ? "'" : '"';
   const q = (val) => csvEscape(cleanNewlines(String(val ?? '')), qualifier);
 
@@ -179,18 +215,16 @@ function generateCSV(products, feed) {
     ...remainingCols,
   ];
 
-  // ── Header — GMC mapped name ──────────────────────────────
   const headerRow = allCols
     .map(k => GMC_FIELD_MAP[k] || k)
     .join(',');
 
-  // ── Rows ──────────────────────────────────────────────────
   const rows = products.map(p => {
     return allCols.map(key => {
       if (key === 'sourceId')     return q(p.sourceId || '');
       if (key === 'product_name') return q(feed.output_title_text || p.product_name || '');
       if (key === 'description')  return q(feed.output_desc_text  || p.description  || '');
-      if (key === 'product_url')  return q((feed.output_link_text || p.product_url  || '') + tracking);
+      if (key === 'product_url')  return q(appendTracking(feed.output_link_text || p.product_url || '', tracking)); // FIX 3
       if (key === 'stock')        return q(p.stock > 0 ? 'in stock' : 'out of stock');
       if (key === 'price')        return q(p.price != null ? `${p.price} ${currency}` : '');
       if (key === 'was_price') {
@@ -206,7 +240,6 @@ function generateCSV(products, feed) {
     ? [headerRow, ...rows]
     : rows;
 
-  // \r\n — GMC Windows compatible
   return lines.join('\r\n');
 }
 

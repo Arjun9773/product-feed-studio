@@ -305,7 +305,7 @@ async function importFeedForTenant(tenantId, feed) {
     let auditSummary   = { high: 0, medium: 0, low: 0, others: 0 };
     // Step 6: Process each product
     for (const rawProduct of products) {
-       console.log(`[IMAGE] product_image: "${rawProduct.product_image}"`);
+      //  console.log(`[IMAGE] product_image: "${rawProduct.product_image}"`);
       const uniqueId = rawProduct.item_code || rawProduct.ean_id || rawProduct.id;
       if (!uniqueId) continue;
 

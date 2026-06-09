@@ -152,24 +152,20 @@ async function recalculateAudit(tenantDb) {
   const productsCol = tenantDb.collection('products');
   const auditCol    = tenantDb.collection('feed_audit_products');
 
-  const products = await productsCol
-    .find({ is_active: true })
-    .toArray();
+  const products = await productsCol.find({ is_active: true }).toArray();
+  
+  console.log('[AUDIT] Total products:', products.length); // ✅ add
 
-  if (products.length === 0) return { updated: 0 };
-
-  // ── Stale docs delete — inactive products clean ──
   const activeSources = products.map(p => p.sourceId);
   await auditCol.deleteMany({ sourceId: { $nin: activeSources } });
 
-  // ── ஒவ்வொரு product missing fields recalculate ──
   const bulkOps = products.map(product => {
-    const issues = ISSUE_FIELDS
-      .filter(({ field }) => {
-        const val = product[field];
-        return val === null || val === undefined || val === '';
-      })
-      .map(({ field, label, priority }) => ({ field, label, priority }));
+    const issues = ISSUE_FIELDS.filter(({ field }) => {
+      const val = product[field];
+      return val === null || val === undefined || val === '' || val === 'null';
+    });
+
+    console.log(`[AUDIT] ${product.sourceId} | description: ${product.description} | issues: ${issues.map(i => i.field)}`); // ✅ add
 
     return {
       updateOne: {
@@ -180,7 +176,9 @@ async function recalculateAudit(tenantDb) {
     };
   });
 
-  await auditCol.bulkWrite(bulkOps);
+  const result = await auditCol.bulkWrite(bulkOps);
+  console.log('[AUDIT] bulkWrite result:', result.modifiedCount, result.upsertedCount); // ✅ add
+  
   return { updated: products.length };
 }
 
