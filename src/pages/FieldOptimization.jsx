@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ImageOff, Sparkles, Check, X, XCircle, Loader2,
   Pencil, MousePointerClick, Package, Layers,
-  CheckCircle2, AlertCircle, Upload
+  CheckCircle2, AlertCircle, Upload, Filter
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,19 +14,10 @@ import API from "@/hooks/useApi";
 import { toast } from "sonner";
 import { useAuditFields } from "@/hooks/useAuditFields";
 
-// ============================================================
-// TAGGING OPTIONS
-// ============================================================
 const TAGGING_OPTIONS = ["All", "Untagged", "Tagged"];
-
-const EXCLUDE_FIELDS = ['google_category', 'proper_casing'];
-
-// Image fields — these get file-upload + preview UI
-const IMAGE_FIELDS = [
-  'additional_image',
-  'additional_image_link',
-  'image_link',
-  'image',
+const EXCLUDE_FIELDS  = ['google_category', 'proper_casing'];
+const IMAGE_FIELDS    = [
+  'additional_image', 'additional_image_link', 'image_link', 'image',
   ...Array.from({ length: 8 }, (_, i) => `additional_image${i + 1}`),
 ];
 
@@ -39,29 +30,19 @@ function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Preview காட்டு
     const reader = new FileReader();
-    reader.onload = () => onInputChange(reader.result); // temp preview
+    reader.onload = () => onInputChange(reader.result);
     reader.readAsDataURL(file);
-
-    // Server-க்கு upload பண்ணு
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('image', file);
-
-      const res  = await fetch('/api/upload-image', {
-        method: 'POST',
-        body: formData,
-      });
+      const res  = await fetch('/api/upload-image', { method: 'POST', body: formData });
       const data = await res.json();
-
-      // Preview-ஐ real URL-ஆல் replace பண்ணு
-      onInputChange(data.url); // e.g. /uploads/products/product-123.jpg
+      onInputChange(data.url);
     } catch {
       toast.error('Upload failed');
-      onInputChange(''); // preview clear
+      onInputChange('');
     } finally {
       setUploading(false);
     }
@@ -72,7 +53,7 @@ function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
   return (
     <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
       {hasPreview && (
-        <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-border bg-secondary shrink-0">
+        <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-border bg-secondary shrink-0">
           <img src={state.inputVal} alt="preview" className="w-full h-full object-cover" />
           <button
             onClick={() => onInputChange("")}
@@ -82,42 +63,184 @@ function ImageUploadCell({ state, onInputChange, onSave, onSelect }) {
           </button>
         </div>
       )}
-
       <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border bg-secondary px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-all w-fit">
         {uploading
           ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Uploading...</span></>
-          : <><Upload className="h-3.5 w-3.5" /><span>{hasPreview ? "Change Image" : "Upload Image"}</span></>
+          : <><Upload className="h-3.5 w-3.5" /><span>{hasPreview ? "Change" : "Upload"}</span></>
         }
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          disabled={uploading}
-          onChange={handleFileChange}
-        />
+        <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={handleFileChange} />
       </label>
-
       <div className="flex items-center gap-2">
         <Button
-          size="sm"
-          className="h-7 text-xs gap-1 px-3"
-          onClick={onSave}
-          // URL இருந்தால் மட்டும் save enable — base64 இல்லை
+          size="sm" className="h-7 text-xs gap-1 px-3" onClick={onSave}
           disabled={!state.inputVal || state.inputVal.startsWith('data:')}
         >
-          <Check className="h-3 w-3" />
-          {uploading ? 'Wait...' : 'Save'}
+          <Check className="h-3 w-3" />{uploading ? 'Wait...' : 'Save'}
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>
-          Cancel
-        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={onSelect}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
+function TruncatedText({ value, maxChars = 80 }) {
+  const [expanded, setExpanded] = useState(false);
+  
+  if (!value) return null;
+  
+  const isLong = value.length > maxChars;
+  const display = expanded ? value : value.slice(0, maxChars);
+  
+  return (
+    <span className="text-sm text-foreground">
+      {display}
+      {isLong && (
+        <>
+          {!expanded && "... "}
+          <button
+            onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+            className="text-primary text-xs hover:underline ml-1"
+          >
+            {expanded ? "Show less" : "Show more"}
+          </button>
+        </>
+      )}
+    </span>
+  );
+}
+
+// ============================================================
+// PRODUCT CARD — mobile view
+// ============================================================
+function ProductCard({ idx, product, state, selectedField, onSelect, onSave, onClear, onInputChange }) {
+  const isFilled     = state?.value !== "" && state?.value != null;
+  const isUnverified = state?.status === 'unverified' && !isFilled;
+  const isEditing    = state?.editing;
+  const isDesc       = selectedField?.field === "description";
+  const isImage      = IMAGE_FIELDS.includes(selectedField?.field);
+
+  return (
+    <div className={`border border-border rounded-xl p-3 transition-colors ${isEditing ? "bg-primary/5 border-primary/30" : "bg-card"}`}>
+      {/* Top row — image + name + status */}
+      <div className="flex items-start gap-3 mb-3">
+        <div className="h-12 w-12 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+          {product.image
+            ? <img src={product.image} alt="" className="h-12 w-12 rounded-lg object-cover" />
+            : <ImageOff className="h-4 w-4 text-muted-foreground" />
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground truncate">
+            {product.product_name || product.title || product.name || "—"}
+          </p>
+          <p className="text-xs text-muted-foreground">{product.brand || "—"}</p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {product.price && (
+              <span className="text-xs font-medium text-foreground">₹{Number(product.price).toLocaleString()}</span>
+            )}
+            {product.product_url && (
+              <a href={product.product_url} target="_blank" rel="noopener noreferrer"
+                className="text-[10px] text-primary hover:underline">View ↗</a>
+            )}
+          </div>
+        </div>
+        {/* Status badge */}
+        <div className="shrink-0">
+          {isFilled ? (
+            <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
+              <Check className="h-2.5 w-2.5" />Filled
+            </Badge>
+          ) : isUnverified ? (
+            <button onClick={onSelect}
+              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning">
+              <AlertCircle className="h-2.5 w-2.5" />Unverified
+            </button>
+          ) : (
+            <Badge className="bg-secondary text-muted-foreground border-0 text-[10px]">Empty</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Category */}
+      {product.category && (
+        <p className="text-[10px] text-muted-foreground mb-2 truncate">{product.category}</p>
+      )}
+
+      {/* Field value section */}
+      <div className="border-t border-border pt-2.5">
+        <p className="text-[10px] font-medium text-primary mb-1.5">{selectedField?.label}</p>
+        {isEditing ? (
+          isImage ? (
+            <ImageUploadCell state={state} onInputChange={onInputChange} onSave={onSave} onSelect={onSelect} />
+          ) : (
+            <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+              {isDesc ? (
+                <textarea
+                  autoFocus rows={3}
+                  className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                  placeholder={`Enter ${selectedField.label}…`}
+                  value={state.inputVal}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey && state.inputVal.trim()) onSave();
+                    if (e.key === "Escape") onSelect();
+                  }}
+                />
+              ) : (
+                <Input
+                  autoFocus
+                  className="h-9 text-sm bg-secondary border-border"
+                  placeholder={`Enter ${selectedField.label}…`}
+                  value={state.inputVal}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && state.inputVal.trim()) onSave();
+                    if (e.key === "Escape") onSelect();
+                  }}
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="h-7 text-xs gap-1 px-3 flex-1" onClick={onSave} disabled={!state.inputVal.trim()}>
+                  <Check className="h-3 w-3" />Save
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs px-3" onClick={onSelect}>Cancel</Button>
+              </div>
+            </div>
+          )
+        ) : isFilled ? (
+          <div className="flex items-center gap-2">
+            {isImage ? (
+              <img src={state.value} alt="uploaded"
+                className="h-10 w-10 rounded-lg object-cover border border-border"
+                onError={(e) => { e.target.style.display = 'none'; }} />
+            ) : (
+              <TruncatedText value={state.value} maxChars={80} />
+            )}
+            <button onClick={onSelect}
+              className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={onClear}
+              className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button onClick={onSelect}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors w-full justify-center border border-dashed border-border rounded-lg py-2">
+            {isImage
+              ? <><Upload className="h-3.5 w-3.5" /><span>Click to upload</span></>
+              : <><MousePointerClick className="h-3.5 w-3.5" /><span>Click to add</span></>
+            }
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 // ============================================================
-// PRODUCT ROW
+// PRODUCT ROW — desktop table view
 // ============================================================
 function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onClear, onInputChange }) {
   const isFilled     = state?.value !== "" && state?.value != null;
@@ -127,79 +250,44 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
   const isImage      = IMAGE_FIELDS.includes(selectedField?.field);
 
   return (
-    <tr
-      className={`border-b border-border transition-colors ${
-        isEditing ? "bg-primary/5" : "hover:bg-secondary/30"
-      }`}
-    >
-      {/* Index */}
+    <tr className={`border-b border-border transition-colors ${isEditing ? "bg-primary/5" : "hover:bg-secondary/30"}`}>
       <td className="px-4 py-3 text-sm text-muted-foreground w-10">{idx}</td>
-
-      {/* Image */}
       <td className="px-4 py-3 w-12">
         <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-          {product.image ? (
-            <img
-              src={product.image}
-              alt=""
-              className="h-10 w-10 rounded-lg object-cover"
-            />
-          ) : (
-            <ImageOff className="h-4 w-4 text-muted-foreground" />
-          )}
+          {product.image
+            ? <img src={product.image} alt="" className="h-10 w-10 rounded-lg object-cover" />
+            : <ImageOff className="h-4 w-4 text-muted-foreground" />
+          }
         </div>
       </td>
-
-      {/* Product Name */}
       <td className="px-4 py-3">
         <p className="text-sm font-medium text-foreground truncate max-w-[180px]">
           {product.product_name || product.title || product.name || "—"}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">{product.brand || "—"}</p>
       </td>
-
-      {/* Product URL */}
       <td className="px-4 py-3 text-xs max-w-[160px]">
-        {product.product_url ? (
-          <a
-            href={product.product_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline truncate block"
-          >
-            View Product ↗
-          </a>
-        ) : (
-          <span className="text-muted-foreground italic">No URL</span>
-        )}
+        {product.product_url
+          ? <a href={product.product_url} target="_blank" rel="noopener noreferrer"
+              className="text-primary hover:underline truncate block">View Product ↗</a>
+          : <span className="text-muted-foreground italic">No URL</span>
+        }
       </td>
-
-      {/* Category */}
       <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px]">
         <span className="truncate block">{product.category || "—"}</span>
       </td>
-
-      {/* Price */}
       <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
         {product.price ? `₹${Number(product.price).toLocaleString()}` : "—"}
       </td>
-
-      {/* Field Value */}
       <td className="px-4 py-3 min-w-[200px]">
         {isEditing ? (
           isImage ? (
-            <ImageUploadCell
-              state={state}
-              onInputChange={onInputChange}
-              onSave={onSave}
-              onSelect={onSelect}
-            />
+            <ImageUploadCell state={state} onInputChange={onInputChange} onSave={onSave} onSelect={onSelect} />
           ) : (
             <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
               {isDesc ? (
                 <textarea
-                  autoFocus
-                  rows={4}
+                  autoFocus rows={4}
                   className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all leading-relaxed"
                   placeholder={`Enter ${selectedField.label}…`}
                   value={state.inputVal}
@@ -232,34 +320,24 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
           )
         ) : isFilled ? (
           <div className="flex items-center gap-2">
-            {isImage ? (
-              <img
-                src={state.value}
-                alt="uploaded"
-                className="h-10 w-10 rounded-lg object-cover border border-border"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <span className="text-sm font-medium text-foreground">{state.value}</span>
-            )}
-            <button
-              onClick={onSelect}
-              className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-            >
+            {isImage
+              ? <img src={state.value} alt="uploaded"
+                  className="h-10 w-10 rounded-lg object-cover border border-border"
+                  onError={(e) => { e.target.style.display = 'none'; }} />
+              : <TruncatedText value={state.value} maxChars={80} />
+            }
+            <button onClick={onSelect}
+              className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all">
               <Pencil className="h-3 w-3" />
             </button>
-            <button
-              onClick={onClear}
-              className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-            >
+            <button onClick={onClear}
+              className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all">
               <X className="h-3 w-3" />
             </button>
           </div>
         ) : (
-          <button
-            onClick={onSelect}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors group"
-          >
+          <button onClick={onSelect}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors group">
             {isImage
               ? <><Upload className="h-3.5 w-3.5" /><span className="italic">Click to upload</span></>
               : <><MousePointerClick className="h-3.5 w-3.5" /><span className="italic">Click to add</span></>
@@ -267,25 +345,18 @@ function ProductRow({ idx, product, state, selectedField, onSelect, onSave, onCl
           </button>
         )}
       </td>
-
-      {/* Status */}
       <td className="px-4 py-3">
         {isFilled ? (
           <Badge className="bg-success/10 text-success border-0 text-[10px] gap-1">
             <Check className="h-2.5 w-2.5" />Filled
           </Badge>
         ) : isUnverified ? (
-          <button
-            onClick={onSelect}
-            className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning hover:bg-warning/20 transition-colors"
-          >
-            <AlertCircle className="h-2.5 w-2.5" />
-            Unverified
+          <button onClick={onSelect}
+            className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning hover:bg-warning/20 transition-colors">
+            <AlertCircle className="h-2.5 w-2.5" />Unverified
           </button>
         ) : (
-          <Badge className="bg-secondary text-muted-foreground border-0 text-[10px]">
-            Empty
-          </Badge>
+          <Badge className="bg-secondary text-muted-foreground border-0 text-[10px]">Empty</Badge>
         )}
       </td>
     </tr>
@@ -300,15 +371,9 @@ export default function FieldOptimization() {
   const location       = useLocation();
 
   const { fields: auditFields, loading: fieldsLoading } = useAuditFields();
-  // console.log(auditFields.map(f => f.field));
 
   const VISIBLE_FIELDS = useMemo(
     () => auditFields.filter(f => !EXCLUDE_FIELDS.includes(f.field)),
-    [auditFields]
-  );
-
-  const GMC_REQUIRED_FIELDS = useMemo(
-    () => auditFields.filter(f => f.gmc_required).map(f => f.field),
     [auditFields]
   );
 
@@ -321,7 +386,6 @@ export default function FieldOptimization() {
     }, {}),
   [VISIBLE_FIELDS]);
 
-  // ── State ──────────────────────────────────────────────────
   const [selectedField,    setSelectedField]    = useState(null);
   const [products,         setProducts]         = useState([]);
   const [loading,          setLoading]          = useState(false);
@@ -332,26 +396,23 @@ export default function FieldOptimization() {
   const [productStates,    setProductStates]    = useState({});
   const [aiLoading,        setAiLoading]        = useState(false);
   const [saving,           setSaving]           = useState(false);
+  const [showFilters,      setShowFilters]      = useState(false);
 
   const { currentStoreId } = useAuth();
 
-  // ── Set initial selectedField once VISIBLE_FIELDS loads ───
   useEffect(() => {
     if (VISIBLE_FIELDS.length === 0) return;
     if (selectedField) return;
-
     const navField = location.state?.field;
     if (navField) {
       const match = VISIBLE_FIELDS.find(f => f.field === navField);
       if (match) { setSelectedField(match); return; }
     }
-
     const urlField = searchParams.get('field');
     if (urlField) {
       const match = VISIBLE_FIELDS.find(f => f.field === urlField);
       if (match) { setSelectedField(match); return; }
     }
-
     setSelectedField(VISIBLE_FIELDS[0]);
   }, [VISIBLE_FIELDS]);
 
@@ -363,29 +424,29 @@ export default function FieldOptimization() {
     if (match) setSelectedField(match);
   }, [location.state, VISIBLE_FIELDS]);
 
-  // ── Load products missing the selected field ───────────────
   const loadProducts = useCallback(async () => {
     if (!currentStoreId || !selectedField) return;
     setLoading(true);
     try {
-      const res = await API.get(
-        `/products/missing-field?field=${selectedField.field}`
-      );
+      const res  = await API.get(`/products/missing-field?field=${selectedField.field}`);
       const data = res.data ?? [];
       setProducts(data);
-
       const states = {};
       data.forEach(p => {
-        states[p.sourceId] = {
-          value:    p[selectedField.field] || "",
-          editing:  false,
-          inputVal: "",
-          status:   null,
+        const val = p[selectedField.field];
+        // ✅ "null" string-ஐ empty-ஆ மாத்து
+        const cleanVal = (val === 'null' || val === null || val === undefined) ? '' : val;
+        states[p.sourceId] = { 
+          value: cleanVal, 
+          editing: false, 
+          inputVal: "", 
+          status: null 
         };
       });
       setProductStates(states);
     } catch {
       toast.error("Failed to load products");
+
     } finally {
       setLoading(false);
     }
@@ -393,15 +454,14 @@ export default function FieldOptimization() {
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
-  // ── Derived filters ────────────────────────────────────────
   const brands     = [...new Set(products.map(p => p.brand).filter(Boolean))];
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   const filtered = products.filter(p => {
-    const ps           = productStates[p.sourceId];
-    const matchSearch  = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
-    const matchCat     = selectedCategory ? p.category === selectedCategory : true;
-    const matchBrand   = selectedBrand    ? p.brand    === selectedBrand    : true;
+    const ps          = productStates[p.sourceId];
+    const matchSearch = (p.product_name || p.title || "").toLowerCase().includes(search.toLowerCase());
+    const matchCat    = selectedCategory ? p.category === selectedCategory : true;
+    const matchBrand  = selectedBrand    ? p.brand    === selectedBrand    : true;
     const matchTagging =
       selectedTagging === "All"    ? true :
       selectedTagging === "Tagged" ? ps?.value !== "" :
@@ -411,7 +471,6 @@ export default function FieldOptimization() {
 
   const filledCount = Object.values(productStates).filter(s => s.value !== "").length;
 
-  // ── Helpers ────────────────────────────────────────────────
   function update(id, patch) {
     setProductStates(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }));
   }
@@ -446,67 +505,82 @@ export default function FieldOptimization() {
     if (match) setSelectedField(match);
   }
 
-  // ── AI Fill ────────────────────────────────────────────────
   const handleAiFill = async () => {
-    if (!selectedField) return;
+  if (!selectedField) return;
 
-      console.log('[AI] selectedField:', selectedField);
-    setAiLoading(true);
-    try {
-      const unfilled = products.filter(p => !productStates[p.sourceId]?.value);
-      if (unfilled.length === 0) {
-        toast.info("All products already filled!");
-        return;
-      }
+  setAiLoading(true);
 
-      const res = await API.post('/ai/fill-field', {
-        products:   unfilled,
-        fieldLabel: selectedField.field,
-      });
+  try {
+    const unfilled = products.filter(
+      p => !productStates[p.sourceId]?.value
+    );
 
-      const updates = res.data?.data ?? [];
-
-      let filledCount    = 0;
-      let unverifiedCount = 0;
-
-      setProductStates(prev => {
-        const next = { ...prev };
-        updates.forEach(({ id, value, status }) => {
-          if (next[id]) {
-            next[id] = { ...next[id], value, editing: false, inputVal: '', status };
-            if (status === 'filled')     filledCount++;
-            if (status === 'unverified') unverifiedCount++;
-          }
-        });
-        return next;
-      });
-        setSelectedTagging("All");
-      if (filledCount > 0)     toast.success(`${filledCount} products filled!`);
-      if (unverifiedCount > 0) toast.warning(`${unverifiedCount} products are unverified - please fill manually`);
-
-    } catch {
-      toast.error('AI fill failed');
-    } finally {
-      setAiLoading(false);  
+    if (unfilled.length === 0) {
+      toast.info("All products already filled!");
+      return;
     }
-  };
 
-  // ── Save all to DB ─────────────────────────────────────────
+    const res = await API.post("/ai/fill-field", {
+      products: unfilled,
+      fieldLabel: selectedField.field
+    });
+
+    const updates = res.data?.data ?? [];
+
+    let filledCount = 0;
+    let unverifiedCount = 0;
+
+    setProductStates(prev => {
+      const next = { ...prev };
+
+      updates.forEach(({ id, value, status }) => {
+        if (next[id]) {
+          next[id] = {
+            ...next[id],
+            value,
+            editing: false,
+            inputVal: "",
+            status
+          };
+
+          if (status === "filled") filledCount++;
+          if (status === "unverified") unverifiedCount++;
+        }
+      });
+
+      return next;
+    });
+
+    // ❌ Conflict line REMOVED
+    setSelectedTagging("All");
+
+    if (filledCount > 0) {
+      toast.success(`${filledCount} products filled!`);
+    }
+
+    if (unverifiedCount > 0) {
+      toast.warning(`${unverifiedCount} products are unverified`);
+    }
+
+  } catch (err) {
+    console.error(err);
+    toast.error("AI fill failed");
+  } finally {
+    setAiLoading(false);
+  }
+};
+
   const handleSaveAll = async () => {
     if (!selectedField) return;
     const filled = Object.entries(productStates).filter(([, s]) => s.value !== "" && s.value != null);
     if (filled.length === 0) { toast.info("No values to save"); return; }
-
     setSaving(true);
     try {
       const updates = filled.map(([id, s]) => ({ id, value: s.value }));
-      const res = await API.put('/products/bulk-update', {
-        field: selectedField.field,
-        updates,
-      });
-
+      const res = await API.put('/products/bulk-update', { field: selectedField.field, updates });
       if (res.status === 200) {
         toast.success(`Saved ${filled.length} products!`);
+        await API.post('/audit/refresh');
         await loadProducts();
       }
     } catch (err) {
@@ -517,7 +591,6 @@ export default function FieldOptimization() {
     }
   };
 
-  // ── Loading ───────────────────────────────────────────────
   if (fieldsLoading || !selectedField) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -529,32 +602,24 @@ export default function FieldOptimization() {
 
   const isImageField = IMAGE_FIELDS.includes(selectedField.field);
 
-  // ── Render ─────────────────────────────────────────────────
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 sm:space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-2 sm:gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Field Optimization</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Field Optimization</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 sm:mt-1">
             Select a field to see products missing that value. Fill manually or use AI.
           </p>
         </div>
         {filledCount > 0 && (
-          <div className="flex items-center gap-2">
-            <Badge className="bg-success/10 text-success border border-success/30 px-3 py-1 text-xs gap-1">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Badge className="bg-success/10 text-success border border-success/30 px-2.5 sm:px-3 py-1 text-xs gap-1">
               <Check className="h-3 w-3" />{filledCount} filled
             </Badge>
-            <Button onClick={handleSaveAll} disabled={saving} size="sm" className="gap-2">
-              {saving
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <Check className="h-4 w-4" />
-              }
+            <Button onClick={handleSaveAll} disabled={saving} size="sm" className="gap-2 flex-1 sm:flex-none">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               {saving ? "Saving..." : "Save All to DB"}
             </Button>
           </div>
@@ -562,154 +627,167 @@ export default function FieldOptimization() {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
         {[
-          { label: "Total Missing",    value: products.length,              icon: Package,      color: "text-primary",  bg: "bg-primary/10"  },
-          { label: "Fields Available", value: VISIBLE_FIELDS.length,        icon: Layers,       color: "text-info",     bg: "bg-info/10"     },
-          { label: "Filled",           value: filledCount,                   icon: CheckCircle2, color: "text-success",  bg: "bg-success/10"  },
-          { label: "Remaining",        value: products.length - filledCount, icon: AlertCircle,  color: "text-warning",  bg: "bg-warning/10"  },
+          { label: "Total Missing",    value: products.length,              icon: Package,      color: "text-primary", bg: "bg-primary/10" },
+          { label: "Fields Available", value: VISIBLE_FIELDS.length,        icon: Layers,       color: "text-info",    bg: "bg-info/10"    },
+          { label: "Filled",           value: filledCount,                   icon: CheckCircle2, color: "text-success", bg: "bg-success/10" },
+          { label: "Remaining",        value: products.length - filledCount, icon: AlertCircle,  color: "text-warning", bg: "bg-warning/10" },
         ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className={`rounded-xl border border-border p-4 flex items-start gap-4 ${bg}`}>
-            <div className={`p-2 rounded-lg ${bg}`}>
-              <Icon className={`h-5 w-5 ${color}`} />
+          <div key={label} className={`rounded-xl border border-border p-3 sm:p-4 flex items-start gap-3 sm:gap-4 ${bg}`}>
+            <div className={`p-1.5 sm:p-2 rounded-lg ${bg} shrink-0`}>
+              <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${color}`} />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground font-medium">{label}</p>
-              <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-xl sm:text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
             </div>
           </div>
         ))}
       </div>
 
       {/* ── Filters ── */}
-      <div className="bg-card rounded-xl p-4 border border-border space-y-3">
-        <div className="flex flex-wrap items-end gap-4">
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Data Field</label>
-            <select
-              className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-              value={selectedField.field}
-              onChange={(e) => handleFieldChange(e.target.value)}
-            >
-              {Object.entries(FIELD_GROUPS).map(([group, fields]) => (
-                <optgroup key={group} label={group}>
-                  {fields.map(f => (
-                    <option key={f.field} value={f.field}>{f.label}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        {/* Mobile filter toggle */}
+        <button
+          className="sm:hidden w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-foreground"
+          onClick={() => setShowFilters(v => !v)}
+        >
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span>Filters</span>
+            {(search || selectedCategory || selectedBrand || selectedTagging !== "Untagged") && (
+              <Badge className="bg-primary/10 text-primary border-0 text-[10px] px-1.5">Active</Badge>
+            )}
           </div>
+          <span className="text-muted-foreground text-xs">{showFilters ? "Hide" : "Show"}</span>
+        </button>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Status</label>
-            <select
-              className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-              value={selectedTagging}
-              onChange={e => setSelectedTagging(e.target.value)}
-            >
-              {TAGGING_OPTIONS.map(t => <option key={t}>{t}</option>)}
-            </select>
+        {/* Filter content */}
+        <div className={`${showFilters ? "block" : "hidden"} sm:block p-3 sm:p-4`}>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 sm:gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Data Field</label>
+              <select
+                className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground w-full sm:w-auto"
+                value={selectedField.field}
+                onChange={(e) => handleFieldChange(e.target.value)}
+              >
+                {Object.entries(FIELD_GROUPS).map(([group, fields]) => (
+                  <optgroup key={group} label={group}>
+                    {fields.map(f => <option key={f.field} value={f.field}>{f.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            {/* Mobile — 2 column grid for small selects */}
+            <div className="grid grid-cols-2 sm:contents gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Status</label>
+                <select
+                  className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                  value={selectedTagging}
+                  onChange={e => setSelectedTagging(e.target.value)}
+                >
+                  {TAGGING_OPTIONS.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Category</label>
+                <select
+                  className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                  value={selectedCategory}
+                  onChange={e => setSelectedCategory(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {categories.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Brand</label>
+                <select
+                  className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
+                  value={selectedBrand}
+                  onChange={e => setSelectedBrand(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {brands.map(b => <option key={b}>{b}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1 justify-end">
+                <label className="text-xs font-medium text-muted-foreground invisible">Reset</label>
+                <Button size="sm" variant="outline" className="w-full"
+                  onClick={() => { setSearch(""); setSelectedCategory(""); setSelectedBrand(""); setSelectedTagging("Untagged"); }}>
+                  Reset
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 sm:flex-1 sm:min-w-[150px]">
+              <label className="text-xs font-medium text-muted-foreground">Search</label>
+              <Input
+                placeholder="Search products..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="bg-secondary border-border text-sm"
+              />
+            </div>
+
           </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Category</label>
-            <select
-              className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-            >
-              <option value="">All</option>
-              {categories.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Brand</label>
-            <select
-              className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground"
-              value={selectedBrand}
-              onChange={e => setSelectedBrand(e.target.value)}
-            >
-              <option value="">All</option>
-              {brands.map(b => <option key={b}>{b}</option>)}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
-            <label className="text-xs font-medium text-muted-foreground">Search</label>
-            <Input
-              placeholder="Search products..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="bg-secondary border-border text-sm"
-            />
-          </div>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setSearch("");
-              setSelectedCategory("");
-              setSelectedBrand("");
-              setSelectedTagging("Untagged");
-            }}
-          >
-            Reset
-          </Button>
         </div>
       </div>
 
-      {/* ── AI Fill Card — hide for image fields ── */}
+      {/* ── AI Fill Card ── */}
       {!isImageField && (
-        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 flex items-center justify-between gap-6 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
-              <Sparkles className="h-4 w-4 text-purple-600" />
+        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-xl p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-6">
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center shrink-0">
+                <Sparkles className="h-4 w-4 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                  AI Auto-Fill — {selectedField.label}
+                </p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
+                  AI will suggest <strong>{selectedField.label}</strong> values for {products.length} missing products.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
-                AI Auto-Fill — {selectedField.label}
-              </p>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
-                AI will suggest <strong>{selectedField.label}</strong> values for all{" "}
-                {products.length} missing products instantly.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {filledCount > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              {filledCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-destructive border-destructive/30 text-xs sm:text-sm flex-1 sm:flex-none"
+                  onClick={() => {
+                    const reset = {};
+                    products.forEach(p => { reset[p.sourceId] = { value: "", editing: false, inputVal: "", status: null }; });
+                    setProductStates(reset);
+                  }}
+                >
+                  <XCircle className="h-3.5 w-3.5" />Clear All
+                </Button>
+              )}
               <Button
-                variant="outline"
-                className="gap-2 text-destructive border-destructive/30 text-sm"
-                onClick={() => {
-                  const reset = {};
-                  products.forEach(p => {
-                    reset[p.sourceId] = { value: "", editing: false, inputVal: "", status: null };
-                  });
-                  setProductStates(reset);
-                }}
+                className="gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm flex-1 sm:flex-none"
+                onClick={handleAiFill}
+                disabled={aiLoading || products.length === 0}
               >
-                <XCircle className="h-4 w-4" /> Clear All
+                {aiLoading
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Filling…</>
+                  : <><Sparkles className="h-4 w-4" />AI Fill All</>
+                }
               </Button>
-            )}
-            <Button
-              className="gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm"
-              onClick={handleAiFill}
-              disabled={aiLoading || products.length === 0}
-            >
-              {aiLoading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling…</>
-                : <><Sparkles className="h-4 w-4" /> AI Fill All</>
-              }
-            </Button>
+            </div>
           </div>
-
           {aiLoading && (
-            <div className="w-full h-1 bg-purple-100 rounded-full overflow-hidden">
+            <div className="mt-3 w-full h-1 bg-purple-100 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-purple-500 rounded-full"
                 initial={{ width: "0%" }}
@@ -721,10 +799,10 @@ export default function FieldOptimization() {
         </div>
       )}
 
-      {/* ── Product Table ── */}
+      {/* ── Product List ── */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b border-border">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {loading
               ? "Loading..."
               : `Showing ${filtered.length} of ${products.length} products missing ${selectedField.label}`
@@ -733,53 +811,71 @@ export default function FieldOptimization() {
         </div>
 
         {loading ? (
-          <div className="py-16 flex items-center justify-center gap-3">
+          <div className="py-12 sm:py-16 flex items-center justify-center gap-3">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <span className="text-muted-foreground">Loading products...</span>
+            <span className="text-muted-foreground text-sm">Loading products...</span>
           </div>
         ) : products.length === 0 ? (
-          <div className="py-16 flex flex-col items-center justify-center gap-3">
+          <div className="py-12 sm:py-16 flex flex-col items-center justify-center gap-3">
             <CheckCircle2 className="h-10 w-10 text-success" />
-            <p className="text-success font-medium">
-              All products have {selectedField.label}!
-            </p>
+            <p className="text-success font-medium text-sm">All Missing Fields Completed Successfully</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/50">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-10">#</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-12">Image</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product URL</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-primary">
-                    {selectedField.label}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <AnimatePresence>
-                  {filtered.map((product, idx) => (
-                    <ProductRow
-                      key={product.sourceId}
-                      idx={idx + 1}
-                      product={product}
-                      state={productStates[product.sourceId]}
-                      selectedField={selectedField}
-                      onSelect={() => handleSelect(product.sourceId)}
-                      onSave={() => handleSave(product.sourceId)}
-                      onClear={() => handleClear(product.sourceId)}
-                      onInputChange={(v) => update(product.sourceId, { inputVal: v })}
-                    />
-                  ))}
-                </AnimatePresence>
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Mobile — card view */}
+            <div className="sm:hidden p-3 space-y-3">
+              <AnimatePresence>
+                {filtered.map((product, idx) => (
+                  <ProductCard
+                    key={product.sourceId}
+                    idx={idx + 1}
+                    product={product}
+                    state={productStates[product.sourceId]}
+                    selectedField={selectedField}
+                    onSelect={() => handleSelect(product.sourceId)}
+                    onSave={() => handleSave(product.sourceId)}
+                    onClear={() => handleClear(product.sourceId)}
+                    onInputChange={(v) => update(product.sourceId, { inputVal: v })}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+
+            {/* Desktop — table view */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-secondary/50">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-10">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground w-12">Image</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product URL</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Category</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Price</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-primary">{selectedField.label}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <AnimatePresence>
+                    {filtered.map((product, idx) => (
+                      <ProductRow
+                        key={product.sourceId}
+                        idx={idx + 1}
+                        product={product}
+                        state={productStates[product.sourceId]}
+                        selectedField={selectedField}
+                        onSelect={() => handleSelect(product.sourceId)}
+                        onSave={() => handleSave(product.sourceId)}
+                        onClear={() => handleClear(product.sourceId)}
+                        onInputChange={(v) => update(product.sourceId, { inputVal: v })}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

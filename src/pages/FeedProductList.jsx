@@ -11,12 +11,25 @@ import { useAuth } from "@/context/AuthContext";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const PER_PAGE = 20;
 
+// ── GMC Field Limits ──────────────────────────────────────────
+const FIELD_LIMITS = {
+  title:       150,
+  description: 5000,
+};
+
+// ── Word truncate helper ──────────────────────────────────────
+function truncateWords(str, max = 12) {
+  const words = String(str ?? "").split(" ");
+  if (words.length <= max) return String(str);
+  return words.slice(0, max).join(" ") + "…";
+}
+
 // ── Pretty label ──────────────────────────────────────────────
 function fieldLabel(key) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ── Extract columns from fieldConfig (backend controls order & visibility) ──
+// ── Extract columns from fieldConfig ─────────────────────────
 function extractColumns(products, config) {
   return config
     .map((f) => f.key)
@@ -31,13 +44,22 @@ function EditableCell({ product, fieldKey, fieldConfig, onSave }) {
   const [imgError, setImgError] = useState(false);
   const inputRef                = useRef(null);
 
-  // All display logic comes from backend fieldConfig — no hardcode
-  const config     = fieldConfig.find((f) => f.key === fieldKey);
-  const isReadonly = config?.readonly ?? false;
-  const isImage    = config?.type === "image";
-  const isUrl      = config?.type === "url";
-  const rawVal     = product[fieldKey];
-  const isEmpty    = rawVal === null || rawVal === undefined || rawVal === "";
+  const config      = fieldConfig.find((f) => f.key === fieldKey);
+  const isReadonly  = config?.readonly ?? false;
+  const isImage     = config?.type === "image";
+  const isUrl       = config?.type === "url";
+  const isLongField = fieldKey === "description";
+  const rawVal      = product[fieldKey];
+  const isEmpty     = rawVal === null || rawVal === undefined || rawVal === "";
+
+  // ── Character count logic ─────────────────────────────────
+  const charLimit    = FIELD_LIMITS[fieldKey] ?? null;
+  const charCount    = String(value).length;
+  const isOver       = charLimit && charCount > charLimit;
+  const isWarn       = charLimit && !isOver && charCount >= charLimit * 0.8;
+  const counterColor = isOver ? "text-destructive"
+                     : isWarn ? "text-warning"
+                     : "text-success";
 
   useEffect(() => { setValue(product[fieldKey] ?? ""); }, [product[fieldKey]]);
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
@@ -54,7 +76,7 @@ function EditableCell({ product, fieldKey, fieldConfig, onSave }) {
   }
 
   function handleKeyDown(e) {
-    if (e.key === "Enter")  handleSave();
+    if (e.key === "Enter" && !isLongField) handleSave();
     if (e.key === "Escape") { setValue(product[fieldKey] ?? ""); setEditing(false); }
   }
 
@@ -111,22 +133,49 @@ function EditableCell({ product, fieldKey, fieldConfig, onSave }) {
   if (editing) {
     return (
       <td className="p-2" onClick={(e) => e.stopPropagation()}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-          className="w-full min-w-[100px] border border-primary rounded px-2 py-1 text-xs bg-background text-foreground outline-none ring-1 ring-primary"
-        />
+        {isLongField ? (
+          <textarea
+            ref={inputRef}
+            rows={4}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className={`w-full min-w-[260px] border rounded px-2 py-1 text-xs bg-background text-foreground outline-none ring-1 resize-y transition-colors leading-relaxed ${
+              isOver ? "border-destructive ring-destructive" : "border-primary ring-primary"
+            }`}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className={`w-full min-w-[160px] border rounded px-2 py-1 text-xs bg-background text-foreground outline-none ring-1 transition-colors ${
+              isOver ? "border-destructive ring-destructive" : "border-primary ring-primary"
+            }`}
+          />
+        )}
+        {/* Counter — title & description மட்டும் */}
+        {charLimit && (
+          <p className={`text-[10px] mt-0.5 font-medium ${counterColor}`}>
+            {charCount} / {charLimit}
+            {isLongField && <span className="ml-2 text-muted-foreground font-normal">Ctrl+Enter to save</span>}
+          </p>
+        )}
       </td>
     );
   }
 
   // Normal
   return (
-    <td className="p-3 cursor-pointer group whitespace-nowrap" onClick={() => setEditing(true)} title="Click to edit">
+    <td
+      className="p-3 cursor-pointer group"
+      onClick={() => setEditing(true)}
+      title={isEmpty ? undefined : String(rawVal)}
+    >
       {status === "saving" && <Loader2 size={13} className="animate-spin text-muted-foreground" />}
       {status === "saved"  && <span className="flex items-center gap-1 text-success text-xs"><Check size={12} />Saved</span>}
       {status === "error"  && <span className="flex items-center gap-1 text-destructive text-xs"><X size={12} />Error</span>}
@@ -136,12 +185,34 @@ function EditableCell({ product, fieldKey, fieldConfig, onSave }) {
             — <span className="opacity-0 group-hover:opacity-60 text-[10px] text-primary transition-opacity">fill</span>
           </span>
         ) : (
-          <span className="text-sm text-foreground group-hover:underline decoration-dashed underline-offset-2">
-            {String(rawVal)}
+          <span
+            className="text-sm text-foreground group-hover:underline decoration-dashed underline-offset-2 block max-w-[220px]"
+          >
+            {truncateWords(rawVal, 12)}
           </span>
         )
       )}
     </td>
+  );
+}
+
+// Add this component
+function TruncatedText({ value, maxChars = 120 }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!value) return null;
+  const isLong = value.length > maxChars;
+  return (
+    <span className="text-sm text-foreground">
+      {expanded || !isLong ? value : `${value.slice(0, maxChars)}…`}
+      {isLong && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+          className="ml-1.5 text-xs text-primary hover:underline"
+        >
+          {expanded ? "less" : "more"}
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -152,7 +223,7 @@ export default function FeedProductList() {
 
   const [products, setProducts]       = useState([]);
   const [columns, setColumns]         = useState([]);
-  const [fieldConfig, setFieldConfig] = useState([]);  // ← backend-driven config
+  const [fieldConfig, setFieldConfig] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [search, setSearch]           = useState("");
@@ -173,8 +244,8 @@ export default function FeedProductList() {
       const data = await res.json();
 
       const products    = Array.isArray(data.products)    ? data.products    : [];
+      console.log("First product:", JSON.stringify(products[0], null, 2));
       const fieldConfig = Array.isArray(data.fieldConfig) ? data.fieldConfig : [];
-      setColumns(extractColumns(products, fieldConfig));
 
       setProducts(products);
       setFieldConfig(fieldConfig);
@@ -221,7 +292,7 @@ export default function FeedProductList() {
   const curPage   = Math.min(page, maxPage);
   const pageSlice = filtered.slice((curPage - 1) * PER_PAGE, curPage * PER_PAGE);
 
-  // Stats — fieldConfig-லிருந்து editable columns எடுக்கிறோம்
+  // Stats
   const editableCols     = fieldConfig.filter((f) => !f.readonly && f.type !== "image").map((f) => f.key);
   const uniqueCategories = [...new Set(products.map((p) => p.category).filter(Boolean))].length;
   const missingCount     = products.reduce((acc, p) =>
@@ -306,11 +377,16 @@ export default function FeedProductList() {
                 <th className="p-3 text-left text-muted-foreground font-medium w-10">#</th>
                 {columns.map((col) => {
                   const config = fieldConfig.find((f) => f.key === col);
+                  const limit  = FIELD_LIMITS[col];
                   return (
                     <th key={col} className="p-3 text-left text-muted-foreground font-medium whitespace-nowrap text-xs">
                       {fieldLabel(col)}
-                      {/* Edit icon only for editable, non-image fields */}
-                      {!config?.readonly && config?.type !== "image" && (
+                      {limit && (
+                        <span className="ml-1.5 text-[9px] text-primary/50 font-normal bg-primary/10 px-1 py-0.5 rounded">
+                          max {limit}
+                        </span>
+                      )}
+                      {!config?.readonly && config?.type !== "image" && !limit && (
                         <span className="ml-1 text-[9px] text-primary/40 font-normal">✎</span>
                       )}
                     </th>
