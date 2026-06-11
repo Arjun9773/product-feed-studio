@@ -9,6 +9,7 @@ const googleOAuthTokenSchema = new mongoose.Schema(
       
     },
     companyId: { type: String, required: true }, 
+    googleAdsCustomerId: { type: String },
     email: { type: String, required: true },
     accessToken: { type: String, required: true },
     refreshToken: { type: String },

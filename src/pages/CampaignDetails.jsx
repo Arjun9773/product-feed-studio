@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 import { useParams, Link } from "react-router-dom";
 import {
   Area,
@@ -78,6 +79,7 @@ function statusVariant(status) {
 }
 
 function CampaignDetailsPage() {
+  const { user, currentStoreId } = useAuth();
   const { id } = useParams();
   const [rangeKey, setRangeKey] = useState("last30");
   const [custom, setCustom] = useState();
@@ -91,10 +93,10 @@ function CampaignDetailsPage() {
     const fetchCampaignData = async () => {
       try {
         setLoading(true);
-        const campaignData = await getCampaign(id);
+        const campaignData = await getCampaign(id, currentStoreId, user?.token); // ← pass
         setCampaign(campaignData);
         
-        const analyticsData = await getAnalytics(id, rangeKey, custom);
+        const analyticsData = await getAnalytics(id, rangeKey, custom, currentStoreId, user?.token);
         setData(analyticsData);
         setError(null);
       } catch (err) {

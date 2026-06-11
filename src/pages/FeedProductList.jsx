@@ -160,7 +160,7 @@ export default function FeedProductList() {
 
   const headers = {
     Authorization:  `Bearer ${token}`,
-    "x-tenant-id":  currentStoreId,
+    "x-tenant-id":  currentStoreId,  
     "Content-Type": "application/json",
   };
 

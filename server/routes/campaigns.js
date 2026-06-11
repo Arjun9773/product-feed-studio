@@ -73,10 +73,78 @@ router.post("/", tenantResolver, async (req, res) => {
     });
 
     const savedCampaign = await campaign.save();
+  
+         try {
+       const { createGoogleAdsCampaign } = require("../services/googleAdsService");
+       const googleCampaignId = await createGoogleAdsCampaign(
+         req.tenantId,
+         savedCampaign
+       );
+       await Campaign.findByIdAndUpdate(savedCampaign._id, {
+         campaignId: googleCampaignId
+      });
+      savedCampaign.campaignId = googleCampaignId;
+     } catch (adsError) {
+       console.error("Google Ads create failed:", adsError.message);
+      }
     res.status(201).json({ success: true, campaign: savedCampaign, message: "Campaign created successfully" });
   } catch (error) {
     console.error("Error creating campaign:", error.message);
     res.status(500).json({ error: "Failed to create campaign", message: error.message });
+  }
+});
+
+
+
+router.get("/:id/analytics", tenantResolver, async (req, res) => {
+  try {
+
+    const Campaign = getCampaignModel(req.tenantDb);
+    const campaign = await Campaign.findById(req.params.id);
+ 
+        console.log("Campaign found:", campaign ? campaign.name : "NOT FOUND");
+       console.log("DB name:", req.tenantDb.name);
+       console.log("Analytics route hit!");
+       console.log("Campaign ID:", req.params.id);
+         console.log("Tenant ID:", req.tenantId);
+
+         
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+
+    const { dateRange, startDate, endDate } = req.query;
+    const { getCampaignAnalytics } = require("../services/googleAdsService");
+
+
+    const analyticsData = await getCampaignAnalytics(
+      req.tenantId,
+      campaign.campaignId,
+      { dateRange, startDate, endDate }
+    );
+
+    res.json({ success: true, data: analyticsData });
+  } catch (error) {
+    console.error("Analytics fetch error:", error.message);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+router.get("/:id", tenantResolver, async (req, res) => {
+  try {
+    const Campaign = getCampaignModel(req.tenantDb);
+    const campaign = await Campaign.findById(req.params.id);
+ 
+     
+
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+    res.json({ success: true, data: campaign });
+  } catch (error) {
+    console.error("Fetch error:", error.message);
+    res.status(500).json({ error: "Failed to fetch campaign" });
   }
 });
 

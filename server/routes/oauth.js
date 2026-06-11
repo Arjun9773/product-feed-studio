@@ -151,6 +151,14 @@ router.get("/google/callback", async (req, res) => {
       throw saveError;
     }
 
+     try {
+    const { fetchAndSaveCustomerId } = require("../services/googleAdsService");
+   await fetchAndSaveCustomerId(stateCompanyId);
+    console.log("[OAuth.callback] ✓ Customer ID saved successfully");
+    } catch (adsError) {
+    console.error("[OAuth.callback] Customer ID fetch failed:", adsError.message);
+   }
+
     // Update user with OAuth token reference and connection timestamp
     console.log("[OAuth.callback] Updating user with OAuth token reference...");
     user.googleOAuthToken = oauthToken._id;

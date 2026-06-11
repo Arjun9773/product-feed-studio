@@ -32,7 +32,11 @@ const campaignSchema = new mongoose.Schema(
 
     // Budget & Bidding
     budget: { type: Number }, // Daily budget
-    budgetType: { type: String, enum: ["daily", "lifetime"], default: "daily" },
+budgetType: { 
+  type: String, 
+  enum: ["daily", "total"], 
+  default: "daily" 
+},
     biddingStrategy: {
       type: String,
       default: "Manual CPC",
