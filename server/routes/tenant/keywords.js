@@ -21,7 +21,7 @@ router.get('/products', auth, tenantResolver, async (req, res) => {
       .find({ is_active: true })
       .project({
         sourceId: 1, product_name: 1, brand: 1,
-        category: 1, price: 1,
+        category: 1, price: 1,product_image: 1,
       })
       .toArray();
 
@@ -49,6 +49,7 @@ router.get('/products', auth, tenantResolver, async (req, res) => {
       category: p.category || '',
       price:    p.price    || 0,
       status:   'active',
+      product_image: p.product_image || '',
       active:   kwMap[p.sourceId]?.active   || [],
       inactive: kwMap[p.sourceId]?.inactive || [],
     }));

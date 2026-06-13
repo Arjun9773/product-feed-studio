@@ -401,7 +401,7 @@ async function importFeedForTenant(tenantId, feed) {
     });
     console.log(`[CRON] ✔ Import done:`);
     console.log(`        🆕 New:        ${newCount}`);
-    console.log(`        ✏️  Updated:    ${updatedCount}`);
+    console.log(`        ✏️ Updated:    ${updatedCount}`);
     console.log(`        ✅ Unchanged:   ${unchangedCount}`);
     console.log(`        💤 Inactive:   ${inactiveCount}`);
     console.log(`        🔍 Enriched:   ${enrichedCount}`);

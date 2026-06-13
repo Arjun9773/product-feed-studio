@@ -4,7 +4,7 @@ import {
   FileText, Search, PencilLine, MinusCircle, Plus, X,
   ArrowLeftRight, Trash2, CheckCircle, AlertCircle, Tag, Package,
   Zap, Upload, Bot, Play, RotateCcw,
-  Check, AlertTriangle, Loader2, Save, ToggleLeft, ToggleRight, Eye,
+  Check, AlertTriangle, Loader2, Save, ToggleLeft, ToggleRight, Eye, ImageOff,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -140,9 +140,29 @@ function ValueInput({ condition, value, onChange, products }) {
   return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={condition === 'Title contains' ? 'e.g. refurb, pro…' : 'e.g. WH-, SNY-…'} className={inputCls}/>;
 }
 
-function ProductThumb({ name }) {
+// ============================================
+// FIX: ProductThumb — image support சேர்க்கப்பட்டது
+// ============================================
+function ProductThumb({ name, image }) {
   const cls = THUMB_COLORS[(name || '?').charCodeAt(0) % THUMB_COLORS.length];
-  return <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[11px] font-medium flex-shrink-0 border border-border ${cls}`}>{getInitials(name || '??')}</div>;
+  const [imgError, setImgError] = useState(false);
+
+  if (image && !imgError) {
+    return (
+      <img
+        src={image}
+        alt={name}
+        className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-border"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[11px] font-medium flex-shrink-0 border border-border ${cls}`}>
+      {getInitials(name || '??')}
+    </div>
+  );
 }
 
 function DeleteModal({ kw, type, onConfirm, onCancel }) {
@@ -475,15 +495,12 @@ function CSVImportTab({ products, onApply, onSave }) {
 }
 
 // ============================================
-// AIBatchTab — OPT-OUT MODEL
-// Generate ஆனவுடனே எல்லாம் auto-selected (true)
-// Click பண்ணா deselect — strikethrough காட்டும்
-// Re-click பண்ணா மீண்டும் select ஆகும்
+// AIBatchTab
 // ============================================
 function AIBatchTab({ products, onApply, onSave }) {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading]         = useState(false);
-  const [accepted, setAccepted]       = useState({});   // true = include, false = removed
+  const [accepted, setAccepted]       = useState({});
   const [applied, setApplied]         = useState(false);
   const [error, setError]             = useState('');
   const [selectionType, setSelectionType]   = useState('all');
@@ -519,8 +536,6 @@ function AIBatchTab({ products, onApply, onSave }) {
         return { ...s, name: prod?.name || '', newActive: (s.active || []).filter(k => !prod?.active?.includes(k)), newNegative: [] };
       }).filter(s => s.newActive.length > 0);
       setSuggestions(withNew);
-
-      // OPT-OUT: generate ஆனவுடனே எல்லாம் selected (true)
       const allSelected = {};
       withNew.forEach(s => {
         s.newActive.forEach(k => { allSelected[`${s.id}__active__${k}`] = true; });
@@ -532,7 +547,6 @@ function AIBatchTab({ products, onApply, onSave }) {
     setLoading(false);
   };
 
-  // click = toggle. selected இருந்தா deselect, deselected இருந்தா re-select
   const toggleAccept  = (id, kw, type) => {
     const key = `${id}__${type}__${kw}`;
     setAccepted(prev => ({ ...prev, [key]: !prev[key] }));
@@ -542,7 +556,6 @@ function AIBatchTab({ products, onApply, onSave }) {
   const acceptedCount = Object.values(accepted).filter(Boolean).length;
   const removedCount  = Object.values(accepted).filter(v => v === false).length;
 
-  // Low-confidence keywords deselect பண்ணு
   const deselectLowConfidence = () => {
     setAccepted(prev => {
       const next = { ...prev };
@@ -555,7 +568,6 @@ function AIBatchTab({ products, onApply, onSave }) {
     });
   };
 
-  // எல்லாத்தையும் re-select பண்ணு
   const selectAll = () => {
     const next = {};
     suggestions.forEach(s => {
@@ -586,7 +598,6 @@ function AIBatchTab({ products, onApply, onSave }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4">
-
         {suggestions.length === 0 && !loading && (
           <div className="space-y-4">
             <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
@@ -604,7 +615,6 @@ function AIBatchTab({ products, onApply, onSave }) {
               </div>
               <span className={`text-xs font-medium px-3 py-1 rounded-full inline-block ${selectedProducts.length > 0 ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>{selectedProducts.length} products selected</span>
             </div>
-
             <div className="text-center py-4">
               <Bot size={32} className="text-muted-foreground/30 mx-auto mb-3"/>
               <p className="text-sm font-medium text-foreground mb-1">AI Keyword Suggestions</p>
@@ -632,8 +642,6 @@ function AIBatchTab({ products, onApply, onSave }) {
         {suggestions.length > 0 && (
           <>
             {applied && <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-success/10 border border-success/30 text-xs text-success"><Check size={13}/>{acceptedCount} keywords applied and saved!</div>}
-
-            {/* Summary + actions */}
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <div className="flex items-center gap-2 text-xs">
                 <span className="px-2 py-1 rounded-full bg-info/10 text-info font-medium">{acceptedCount} selected</span>
@@ -642,21 +650,14 @@ function AIBatchTab({ products, onApply, onSave }) {
               </div>
               <div className="flex gap-3">
                 {removedCount > 0 && (
-                  <button onClick={selectAll} className="text-xs text-info font-medium cursor-pointer bg-transparent border-none p-0 hover:underline">
-                    Re-select all
-                  </button>
+                  <button onClick={selectAll} className="text-xs text-info font-medium cursor-pointer bg-transparent border-none p-0 hover:underline">Re-select all</button>
                 )}
-                <button onClick={deselectLowConfidence} className="text-xs text-muted-foreground cursor-pointer bg-transparent border-none p-0 hover:text-foreground hover:underline">
-                  Remove low-confidence
-                </button>
+                <button onClick={deselectLowConfidence} className="text-xs text-muted-foreground cursor-pointer bg-transparent border-none p-0 hover:text-foreground hover:underline">Remove low-confidence</button>
               </div>
             </div>
-
-            {/* Hint banner */}
             <div className="mb-3 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20 text-[11px] text-primary">
               All keywords selected by default. Click a keyword to remove it, click again to re-add.
             </div>
-
             <div className="space-y-3">
               {suggestions.map(s => (
                 <div key={s.id} className="p-3 rounded-lg border border-border bg-card">
@@ -753,13 +754,16 @@ export default function KeywordOptimization() {
         fetch(`${API_BASE}/api/keywords/products`, { headers }),
         fetch(`${API_BASE}/api/keywords/rules`,    { headers }),
       ]);
+      
       const prodJson  = await prodRes.json();
       const rulesJson = await rulesRes.json();
       if (prodJson.success) {
+        // FIX: product_image field map பண்ணுகிறோம்
         const mapped = prodJson.data.map(p => ({
           ...p,
           ruleKeywords:    p.ruleKeywords    || {},
           keyword_sources: p.keyword_sources || {},
+          image:           p.product_image   || '',   // ← இங்கே fix
         }));
         setProducts(mapped);
         if (mapped.length > 0) setSelectedId(mapped[0].id);
@@ -953,7 +957,8 @@ export default function KeywordOptimization() {
                   {pageSlice.length === 0 && <div className="px-4 py-5 text-xs text-muted-foreground">No products found</div>}
                   {pageSlice.map((p) => (
                     <div key={p.id} onClick={() => setSelectedId(p.id)} className={`flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border cursor-pointer transition-colors ${p.id === selectedId ? 'bg-primary/5 border-l-[3px] border-l-primary' : 'bg-card border-l-[3px] border-l-transparent hover:bg-secondary'}`}>
-                      <ProductThumb name={p.name}/>
+                      {/* FIX: image prop pass பண்ணுகிறோம் */}
+                      <ProductThumb name={p.name} image={p.image} />
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-medium text-foreground truncate">{p.name}</div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">SKU: {p.sku}</div>
@@ -1039,10 +1044,6 @@ export default function KeywordOptimization() {
                     </div>
                   )}
                 </div>
-                {/* <div className="p-3.5 border-t border-border flex gap-2 items-center">
-                  <input value={negInput} onChange={(e) => setNegInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addKw('inactive')} placeholder="Add negative keyword..." className="flex-1 border border-border rounded-lg px-3 py-2 text-xs bg-secondary text-foreground outline-none focus:border-ring"/>
-                  <button onClick={() => addKw('inactive')} className="w-[34px] h-[34px] rounded-lg bg-destructive hover:opacity-90 text-destructive-foreground flex items-center justify-center flex-shrink-0 border-none cursor-pointer transition-colors"><Plus size={16}/></button>
-                </div> */}
               </div>
             </>
           )}

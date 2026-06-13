@@ -6,7 +6,6 @@ const googleOAuthTokenSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      
     },
     companyId: { type: String, required: true }, 
     googleAdsCustomerId: { type: String },
