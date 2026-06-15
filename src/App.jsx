@@ -23,6 +23,8 @@ import Settings from "./pages/Settings";
 import CampaignFlow from "./pages/Campaign";
 import CompetitorPriceIntelligence from "@/pages/CompetitorPriceIntelligence";
 import CampaingnDetails from "./pages/CampaignDetails";
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
        
 const queryClient = new QueryClient();
@@ -38,6 +40,8 @@ const App = () => (
             {/* Public */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+             <Route path="/forgot-password" element={<ForgotPassword />} />
+             <Route path="/reset-password/:token" element={<ResetPassword />} />
 
             {/* Protected — both roles use the same dashboard layout */}
             <Route element={

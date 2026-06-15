@@ -8,6 +8,9 @@ const Access = require('../models/Access');
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const { getTenantDb } = require('../config/db');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
 
@@ -243,6 +246,181 @@ router.post('/seed-super-admin', async (req, res) => {
     res.status(201).json({ message: 'Super admin created', userId: admin.userId });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// FORGOT PASSWORD
+router.post('/forgot-password', async (req, res) => {
+  console.log("FORGOT PASSWORD HIT");
+
+  try {
+    const { email } = req.body;
+    console.log("Email:", email);
+
+    const user = await User.findOne({ email });
+    console.log("User Found:", !!user);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    console.log("Token Created");
+
+    user.resetToken = token;
+    user.resetTokenExpiry = Date.now() + 60000;
+
+    await user.save();
+    console.log("User Saved");
+
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: process.env.EMAIL,
+        pass: process.env.EMAIL_PASSWORD
+      }
+    });
+
+    console.log("Transport Created");
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+
+    await transporter.sendMail({
+      from: `"DigitalDataFeed" <${process.env.EMAIL}>`,
+      to: email,
+      subject: "Reset Your Password - DigitalDataFeed",
+      html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+      </head>
+      <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td align="center" style="padding:40px 20px;">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+                
+                <tr>
+                  <td style="background:#4f46e5;padding:30px;text-align:center;">
+                    <h1 style="color:#ffffff;margin:0;">DigitalDataFeed</h1>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:40px;">
+                    <h2 style="margin-top:0;color:#111827;">
+                      Reset Your Password
+                    </h2>
+
+                    <p style="font-size:16px;color:#4b5563;line-height:1.6;">
+                      We received a request to reset the password for your
+                      DigitalDataFeed account.
+                    </p>
+
+                    <p style="font-size:16px;color:#4b5563;line-height:1.6;">
+                      Click the button below to create a new password.
+                    </p>
+
+                    <div style="text-align:center;margin:35px 0;">
+                      <a
+                        href="${resetUrl}"
+                        style="
+                          background:#4f46e5;
+                          color:#ffffff;
+                          text-decoration:none;
+                          padding:14px 30px;
+                          border-radius:8px;
+                          display:inline-block;
+                          font-size:16px;
+                          font-weight:600;
+                        "
+                      >
+                        Reset Password
+                      </a>
+                    </div>
+
+                    <p style="font-size:14px;color:#6b7280;">
+                      This link will expire in 1 hour for security reasons.
+                    </p>
+
+                    <p style="font-size:14px;color:#6b7280;">
+                      If you did not request a password reset, you can safely
+                      ignore this email.
+                    </p>
+
+                    <hr style="border:none;border-top:1px solid #e5e7eb;margin:30px 0;" />
+
+                    <p style="font-size:12px;color:#9ca3af;">
+                      If the button doesn't work, copy and paste this URL into
+                      your browser:
+                    </p>
+
+                    <p style="word-break:break-all;font-size:12px;color:#4f46e5;">
+                      ${resetUrl}
+                    </p>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="background:#f9fafb;padding:20px;text-align:center;">
+                    <p style="margin:0;font-size:12px;color:#9ca3af;">
+                      © ${new Date().getFullYear()} DigitalDataFeed.
+                      All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+      `
+    });
+
+    res.json({ message: 'Reset link sent' });
+
+  } catch (err) {
+    console.error("FORGOT PASSWORD ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// RESET PASSWORD
+router.post('/reset-password/:token', async (req, res) => {
+  try {
+    const user = await User.findOne({
+      resetToken: req.params.token,
+      resetTokenExpiry: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: 'Invalid or expired token'
+      });
+    }
+
+    // Don't hash here!
+    // User model pre-save hook will hash automatically
+    user.password = req.body.password;
+
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+
+    await user.save();
+
+    res.json({
+      message: 'Password reset successful'
+    });
+
+  } catch (err) {
+    console.error('RESET PASSWORD ERROR:', err);
+
+    res.status(500).json({
+      message: err.message
+    });
   }
 });
 

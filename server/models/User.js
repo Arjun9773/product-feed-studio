@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "GoogleOAuthToken",
     },
+    resetToken: { type: String },
+    resetTokenExpiry: { type: Date },
     googleConnectedAt: { type: Date },
   },
   { timestamps: true, collection: "users" },
