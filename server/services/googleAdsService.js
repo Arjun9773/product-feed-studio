@@ -7,12 +7,12 @@ const getClient = (refreshToken) => {
     client_secret: process.env.GOOGLE_CLIENT_SECRET,
     developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
   }).Customer({
-    customer_id: "", // dynamic-ஆ set ஆகும்
+    customer_id: "", // dynamic
     refresh_token: refreshToken,
   });
 };
 
-// Customer ID fetch — OAuth token கிடைத்ததும் call பண்ணணும்
+
 const fetchAndSaveCustomerId = async (companyId) => {
   try {
     const oauthToken = await GoogleOAuthToken.findOne({ 
@@ -51,7 +51,7 @@ const fetchAndSaveCustomerId = async (companyId) => {
   }
 };
 
-// Google Ads-ல் Campaign Create
+// Google Ads Campaign Create
 const createGoogleAdsCampaign = async (companyId, campaignData) => {
   try {
     const oauthToken = await GoogleOAuthToken.findOne({ 
@@ -63,7 +63,7 @@ const createGoogleAdsCampaign = async (companyId, campaignData) => {
       throw new Error("No refresh token found");
     }
 
-    // Customer ID இல்லாம இருந்தால் fetch பண்ணு
+    // Customer ID 
     let customerId = oauthToken.googleAdsCustomerId;
     if (!customerId) {
       customerId = await fetchAndSaveCustomerId(companyId);
@@ -216,7 +216,7 @@ const getCampaignAnalytics = async (companyId, googleCampaignId, { dateRange, st
       LIMIT 10
     `);
 
-    // Data format பண்ணு
+    // Data format
     const metrics = metricsQuery[0] || {};
     const spend = (metrics.metrics?.cost_micros || 0) / 1_000_000;
     const revenue = metrics.metrics?.conversions_value || 0;
@@ -235,7 +235,7 @@ const getCampaignAnalytics = async (companyId, googleCampaignId, { dateRange, st
         convRate: metrics.metrics?.clicks > 0
           ? (metrics.metrics?.conversions / metrics.metrics?.clicks)
           : 0,
-        // GA4 data — later add பண்ணலாம்
+        // GA4 data — later add 
         viewItem: 0,
         addToCart: 0,
         beginCheckout: 0,
