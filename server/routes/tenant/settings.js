@@ -258,7 +258,7 @@ router.get('/users-log', auth, async (req, res) => {
   }
 });
 // Create uploads folder if not exists
-const uploadDir = path.join(__dirname, '../../../uploads');
+const uploadDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 // Multer storage config

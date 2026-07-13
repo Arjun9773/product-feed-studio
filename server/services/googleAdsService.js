@@ -7,12 +7,19 @@ const getClient = (refreshToken) => {
     client_secret: process.env.GOOGLE_CLIENT_SECRET,
     developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
   }).Customer({
+<<<<<<< HEAD
     customer_id: "", // dynamic
+=======
+    customer_id: "", 
+>>>>>>> 263f86da47131467fa8a81d81a3bed3847d71520
     refresh_token: refreshToken,
   });
 };
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 263f86da47131467fa8a81d81a3bed3847d71520
 const fetchAndSaveCustomerId = async (companyId) => {
   try {
     const oauthToken = await GoogleOAuthToken.findOne({ 
@@ -38,7 +45,6 @@ const fetchAndSaveCustomerId = async (companyId) => {
     const customerId = accessibleCustomers.resource_names[0]
       .split("/")[1];
 
-    // DB-ல் save
     await GoogleOAuthToken.findOneAndUpdate(
       { companyId, isActive: true },
       { googleAdsCustomerId: customerId }
@@ -51,7 +57,11 @@ const fetchAndSaveCustomerId = async (companyId) => {
   }
 };
 
+<<<<<<< HEAD
 // Google Ads Campaign Create
+=======
+// Google Ads
+>>>>>>> 263f86da47131467fa8a81d81a3bed3847d71520
 const createGoogleAdsCampaign = async (companyId, campaignData) => {
   try {
     const oauthToken = await GoogleOAuthToken.findOne({ 
@@ -63,7 +73,10 @@ const createGoogleAdsCampaign = async (companyId, campaignData) => {
       throw new Error("No refresh token found");
     }
 
+<<<<<<< HEAD
     // Customer ID 
+=======
+>>>>>>> 263f86da47131467fa8a81d81a3bed3847d71520
     let customerId = oauthToken.googleAdsCustomerId;
     if (!customerId) {
       customerId = await fetchAndSaveCustomerId(companyId);
@@ -216,7 +229,10 @@ const getCampaignAnalytics = async (companyId, googleCampaignId, { dateRange, st
       LIMIT 10
     `);
 
+<<<<<<< HEAD
     // Data format
+=======
+>>>>>>> 263f86da47131467fa8a81d81a3bed3847d71520
     const metrics = metricsQuery[0] || {};
     const spend = (metrics.metrics?.cost_micros || 0) / 1_000_000;
     const revenue = metrics.metrics?.conversions_value || 0;
@@ -313,4 +329,3 @@ const getDateRange = (dateRange, startDate, endDate) => {
   return { fromDate: from.toISOString().split("T")[0], toDate };
 };
 
-module.exports = { createGoogleAdsCampaign, fetchAndSaveCustomerId, getCampaignAnalytics  };

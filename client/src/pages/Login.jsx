@@ -54,10 +54,17 @@ const Login = () => {
                   onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <Link to="/forgot-password" className="text-sm text-indigo-600 hover:underline">
+                      Forgot password?
+                    </Link>
+                  </div>
+                {/* <Label htmlFor="password">Password</Label> */}
                 <Input id="password" type="password" placeholder="••••••••" value={password}
                   onChange={(e) => setPassword(e.target.value)} required />
               </div>
+
 
               {error && (
                 <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md px-3 py-2">
@@ -68,6 +75,7 @@ const Login = () => {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</> : 'Sign in'}
               </Button>
+              
 
               <p className="text-center text-sm text-slate-500">
                 Don't have an account?{' '}

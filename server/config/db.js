@@ -11,7 +11,7 @@ const connectDB = async () => {
 };
 
 const getTenantDb = (storeId) => {
-  const dbName = `_info_${storeId}`;
+  const dbName = `gmc_info_${storeId}`;
   return mongoose.connection.useDb(dbName, { useCache: true });
 };
 
